@@ -99,27 +99,30 @@ void HelloVulkan::createDescriptorSetLayout()
   uint32_t nbTxt = static_cast<uint32_t>(m_textures.size());
   uint32_t nbObj = static_cast<uint32_t>(m_objModel.size());
 
-  // Camera matrices (binding = 0)
-  m_descSetLayoutBind.addBinding(
-      vkDS(0, vkDT::eUniformBuffer, 1, vkSS::eVertex | vkSS::eRaygenKHR));
-  // Materials (binding = 1)
-  m_descSetLayoutBind.addBinding(
-      vkDS(1, vkDT::eStorageBuffer, nbObj, vkSS::eVertex | vkSS::eFragment | vkSS::eClosestHitKHR));
-  // Scene description (binding = 2)
-  m_descSetLayoutBind.addBinding(  //
-      vkDS(2, vkDT::eStorageBuffer, 1, vkSS::eVertex | vkSS::eFragment | vkSS::eClosestHitKHR));
-  // Textures (binding = 3)
-  m_descSetLayoutBind.addBinding(
-      vkDS(3, vkDT::eCombinedImageSampler, nbTxt, vkSS::eFragment | vkSS::eClosestHitKHR));
-  // Materials (binding = 4)
-  m_descSetLayoutBind.addBinding(
-      vkDS(4, vkDT::eStorageBuffer, nbObj, vkSS::eFragment | vkSS::eClosestHitKHR));
-  // Storing vertices (binding = 5)
-  m_descSetLayoutBind.addBinding(  //
-      vkDS(5, vkDT::eStorageBuffer, nbObj, vkSS::eClosestHitKHR));
-  // Storing indices (binding = 6)
-  m_descSetLayoutBind.addBinding(  //
-      vkDS(6, vkDT::eStorageBuffer, nbObj, vkSS::eClosestHitKHR));
+  //Compute shader
+  m_descSetLayoutBind.addBinding(vkDS(0, vkDT::eStorageBuffer, 1, vkSS::eCompute));
+ 
+  //// Camera matrices (binding = 0)
+  //m_descSetLayoutBind.addBinding(
+  //    vkDS(0, vkDT::eUniformBuffer, 1, vkSS::eVertex | vkSS::eRaygenKHR));
+  //// Materials (binding = 1)
+  //m_descSetLayoutBind.addBinding(
+  //    vkDS(1, vkDT::eStorageBuffer, nbObj, vkSS::eVertex | vkSS::eFragment | vkSS::eClosestHitKHR));
+  //// Scene description (binding = 2)
+  //m_descSetLayoutBind.addBinding(  //
+  //    vkDS(2, vkDT::eStorageBuffer, 1, vkSS::eVertex | vkSS::eFragment | vkSS::eClosestHitKHR));
+  //// Textures (binding = 3)
+  //m_descSetLayoutBind.addBinding(
+  //    vkDS(3, vkDT::eCombinedImageSampler, nbTxt, vkSS::eFragment | vkSS::eClosestHitKHR));
+  //// Materials (binding = 4)
+  //m_descSetLayoutBind.addBinding(
+  //    vkDS(4, vkDT::eStorageBuffer, nbObj, vkSS::eFragment | vkSS::eClosestHitKHR));
+  //// Storing vertices (binding = 5)
+  //m_descSetLayoutBind.addBinding(  //
+  //    vkDS(5, vkDT::eStorageBuffer, nbObj, vkSS::eClosestHitKHR));
+  //// Storing indices (binding = 6)
+  //m_descSetLayoutBind.addBinding(  //
+  //    vkDS(6, vkDT::eStorageBuffer, nbObj, vkSS::eClosestHitKHR));
   // The top level acceleration structure
   m_descSetLayoutBind.addBinding(  //
       vkDS(7, vkDT::eAccelerationStructureKHR, 1, vkSS::eFragment));
@@ -136,42 +139,50 @@ void HelloVulkan::updateDescriptorSet()
 {
   std::vector<vk::WriteDescriptorSet> writes;
 
-  // Camera matrices and scene description
-  vk::DescriptorBufferInfo dbiUnif{m_cameraMat.buffer, 0, VK_WHOLE_SIZE};
-  writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 0, &dbiUnif));
-  vk::DescriptorBufferInfo dbiSceneDesc{m_sceneDesc.buffer, 0, VK_WHOLE_SIZE};
-  writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 2, &dbiSceneDesc));
+  //compute shader
+  vk::DescriptorBufferInfo dbiComShdr = {};
+  dbiComShdr.buffer                   = buffer;
+  dbiComShdr.offset                   = 0;
+  dbiComShdr.range                    = bufferSize;
+  writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 0, &dbiComShdr));
+  //// Camera matrices and scene description
+  //vk::DescriptorBufferInfo dbiUnif{m_cameraMat.buffer, 0, VK_WHOLE_SIZE};
+  //writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 0, &dbiUnif));
+  //vk::DescriptorBufferInfo dbiSceneDesc{m_sceneDesc.buffer, 0, VK_WHOLE_SIZE};
+  //writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 2, &dbiSceneDesc));
 
-  // All material buffers, 1 buffer per OBJ
-  std::vector<vk::DescriptorBufferInfo> dbiMat;
-  std::vector<vk::DescriptorBufferInfo> dbiMatIdx;
-  std::vector<vk::DescriptorBufferInfo> dbiVert;
-  std::vector<vk::DescriptorBufferInfo> dbiIdx;
-  for(auto& obj : m_objModel)
-  {
-    dbiMat.emplace_back(obj.matColorBuffer.buffer, 0, VK_WHOLE_SIZE);
-    dbiMatIdx.emplace_back(obj.matIndexBuffer.buffer, 0, VK_WHOLE_SIZE);
-    dbiVert.emplace_back(obj.vertexBuffer.buffer, 0, VK_WHOLE_SIZE);
-    dbiIdx.emplace_back(obj.indexBuffer.buffer, 0, VK_WHOLE_SIZE);
-  }
-  writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 1, dbiMat.data()));
-  writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 4, dbiMatIdx.data()));
-  writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 5, dbiVert.data()));
-  writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 6, dbiIdx.data()));
+  //// All material buffers, 1 buffer per OBJ
+  //std::vector<vk::DescriptorBufferInfo> dbiMat;
+  //std::vector<vk::DescriptorBufferInfo> dbiMatIdx;
+  //std::vector<vk::DescriptorBufferInfo> dbiVert;
+  //std::vector<vk::DescriptorBufferInfo> dbiIdx;
+  //for(auto& obj : m_objModel)
+  //{
+  //  dbiMat.emplace_back(obj.matColorBuffer.buffer, 0, VK_WHOLE_SIZE);
+  //  dbiMatIdx.emplace_back(obj.matIndexBuffer.buffer, 0, VK_WHOLE_SIZE);
+  //  dbiVert.emplace_back(obj.vertexBuffer.buffer, 0, VK_WHOLE_SIZE);
+  //  dbiIdx.emplace_back(obj.indexBuffer.buffer, 0, VK_WHOLE_SIZE);
+  //}
+  //writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 1, dbiMat.data()));
+  //writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 4, dbiMatIdx.data()));
+  //writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 5, dbiVert.data()));
+  //writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 6, dbiIdx.data()));
 
-  // All texture samplers
-  std::vector<vk::DescriptorImageInfo> diit;
-  for(auto& texture : m_textures)
-  {
-    diit.push_back(texture.descriptor);
-  }
-  writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 3, diit.data()));
+  //// All texture samplers
+  //std::vector<vk::DescriptorImageInfo> diit;
+  //for(auto& texture : m_textures)
+  //{
+  //  diit.push_back(texture.descriptor);
+  //}
+  //writes.emplace_back(m_descSetLayoutBind.makeWriteArray(m_descSet, 3, diit.data()));
 
-  vk::AccelerationStructureKHR                   tlas = m_rtBuilder.getAccelerationStructure();
-  vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
-  descASInfo.setAccelerationStructureCount(1);
-  descASInfo.setPAccelerationStructures(&tlas);
-  writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 7, &descASInfo));
+
+  //TODO: Ray tracing
+  //vk::AccelerationStructureKHR                   tlas = m_rtBuilder.getAccelerationStructure();
+  //vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
+  //descASInfo.setAccelerationStructureCount(1);
+  //descASInfo.setPAccelerationStructures(&tlas);
+  //writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 7, &descASInfo));
 
 
   // Writing the information
@@ -213,6 +224,70 @@ void HelloVulkan::createGraphicsPipeline()
   m_debug.setObjectName(m_graphicsPipeline, "Graphics");
 }
 
+void HelloVulkan::createComputePipeline()
+{
+  VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
+  VkPipeline            pipeline            = m_graphicsPipeline;
+  VkPipelineLayout      pipelineLayout      = m_pipelineLayout;
+  /*
+        We create a compute pipeline here. 
+        */
+
+  /*
+        Create a shader module. A shader module basically just encapsulates some shader code.
+        */
+  uint32_t filelength;
+  // the code in comp.spv was created by running the command:
+  // glslangValidator.exe -V shader.comp
+  std::vector<std::string> paths = defaultSearchPaths;
+  auto                     code  = nvh::loadFile("shaders/shader.comp.spv", true, paths);
+  std::vector<char>        v;
+  std::copy(code.begin(), code.end(), std::back_inserter(v));
+
+  VkShaderModuleCreateInfo createInfo = {};
+  createInfo.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.pCode                    = reinterpret_cast<const uint32_t*>(v.data());
+  createInfo.codeSize                 = v.size();
+
+  NVVK_CHECK(vkCreateShaderModule(m_device, &createInfo, NULL, &computeShaderModule));
+
+  /*
+        Now let us actually create the compute pipeline.
+        A compute pipeline is very simple compared to a graphics pipeline.
+        It only consists of a single stage with a compute shader. 
+        So first we specify the compute shader stage, and it's entry point(main).
+        */
+  VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
+  shaderStageCreateInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shaderStageCreateInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+  shaderStageCreateInfo.module = computeShaderModule;
+  shaderStageCreateInfo.pName  = "main";
+
+  /*
+        The pipeline layout allows the pipeline to access descriptor sets. 
+        So we just specify the descriptor set layout we created earlier.
+        */
+  VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+  pipelineLayoutCreateInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutCreateInfo.setLayoutCount = 1;
+  pipelineLayoutCreateInfo.pSetLayouts    = &descriptorSetLayout;
+  NVVK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
+
+  VkComputePipelineCreateInfo pipelineCreateInfo = {};
+  pipelineCreateInfo.sType                       = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  pipelineCreateInfo.stage                       = shaderStageCreateInfo;
+  pipelineCreateInfo.layout                      = pipelineLayout;
+
+  /*
+        Now, we finally create the compute pipeline. 
+        */
+  NVVK_CHECK(
+      vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
+
+  m_graphicsPipeline = pipeline;
+  m_pipelineLayout   = pipelineLayout;
+  m_descSetLayout    = descriptorSetLayout;
+}
 //--------------------------------------------------------------------------------------------------
 // Loading the OBJ file and setting up all buffers
 //

@@ -403,71 +403,8 @@ public:
     return (uint32_t*)str;
   }
 
-  void createComputePipeline()
-  {
-    VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
-    VkPipeline pipeline = m_graphicsPipeline;
-    VkPipelineLayout pipelineLayout = m_pipelineLayout;
-    /*
-        We create a compute pipeline here. 
-        */
+  void createComputePipeline();
 
-    /*
-        Create a shader module. A shader module basically just encapsulates some shader code.
-        */
-    uint32_t filelength;
-    // the code in comp.spv was created by running the command:
-    // glslangValidator.exe -V shader.comp
-    std::vector<std::string> paths = defaultSearchPaths;
-    auto code = nvh::loadFile("shaders/shader.comp.spv", true, paths);
-    std::vector<char> v;
-    std::copy(code.begin(), code.end(), std::back_inserter(v));
-
-    VkShaderModuleCreateInfo createInfo = {};
-    createInfo.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.pCode                    = reinterpret_cast<const uint32_t*>(v.data());
-    createInfo.codeSize                 = v.size();
-
-    NVVK_CHECK(vkCreateShaderModule(m_device, &createInfo, NULL, &computeShaderModule));
-
-    /*
-        Now let us actually create the compute pipeline.
-        A compute pipeline is very simple compared to a graphics pipeline.
-        It only consists of a single stage with a compute shader. 
-        So first we specify the compute shader stage, and it's entry point(main).
-        */
-    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-    shaderStageCreateInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shaderStageCreateInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-    shaderStageCreateInfo.module = computeShaderModule;
-    shaderStageCreateInfo.pName  = "main";
-
-    /*
-        The pipeline layout allows the pipeline to access descriptor sets. 
-        So we just specify the descriptor set layout we created earlier.
-        */
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-    pipelineLayoutCreateInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutCreateInfo.setLayoutCount = 1;
-    pipelineLayoutCreateInfo.pSetLayouts    = &descriptorSetLayout;
-    NVVK_CHECK(
-        vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
-
-    VkComputePipelineCreateInfo pipelineCreateInfo = {};
-    pipelineCreateInfo.sType                       = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipelineCreateInfo.stage                       = shaderStageCreateInfo;
-    pipelineCreateInfo.layout                      = pipelineLayout;
-
-    /*
-        Now, we finally create the compute pipeline. 
-        */
-    NVVK_CHECK(
-        vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
-
-    m_graphicsPipeline = pipeline;
-    m_pipelineLayout   = pipelineLayout;
-    m_descSetLayout    = descriptorSetLayout;
-  }
 
   void createCommandBuffer(uint32_t& _queueFamilyIndex)
   {

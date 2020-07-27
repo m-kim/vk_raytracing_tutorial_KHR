@@ -172,8 +172,9 @@ int main(int argc, char** argv)
 
   //helloVk.m_bufferSize = SAMPLE_WIDTH * SAMPLE_HEIGHT * 4 * 4;
   helloVk.createComputeBuffer();
-  helloVk.createComputeDescriptorSetLayout();
-  helloVk.createDescriptorSet();
+  helloVk.createDescriptorSetLayout();
+  helloVk.updateDescriptorSet();
+  
   helloVk.createComputePipeline();
   helloVk.createCommandBuffer(vkctx.m_queueGCT.familyIndex);
 
