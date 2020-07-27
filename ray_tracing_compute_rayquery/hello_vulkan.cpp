@@ -383,10 +383,10 @@ void HelloVulkan::destroyResources()
   vkDestroyBuffer(m_device, buffer, NULL);
   vkDestroyShaderModule(m_device, computeShaderModule, NULL);
 
-  //m_device.destroy(m_graphicsPipeline);
-  //m_device.destroy(m_pipelineLayout);
-  //m_device.destroy(m_descPool);
-  //m_device.destroy(m_descSetLayout);
+  m_device.destroy(m_graphicsPipeline);
+  m_device.destroy(m_pipelineLayout);
+  m_device.destroy(m_descPool);
+  m_device.destroy(m_descSetLayout);
   //m_alloc.destroy(m_cameraMat);
   //m_alloc.destroy(m_sceneDesc);
 

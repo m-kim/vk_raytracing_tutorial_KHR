@@ -151,47 +151,11 @@ public:
   };
   int WIDTH = 3200;
   int HEIGHT = 2400;
-  /*
-    In order to use Vulkan, you must create an instance. 
-    */
-  VkInstance instance;
 
-  VkDebugReportCallbackEXT debugReportCallback;
-  /*
-    The physical device is some device on the system that supports usage of Vulkan.
-    Often, it is simply a graphics card that supports Vulkan. 
-    */
-  VkPhysicalDevice physicalDevice;
-  /*
-    Then we have the logical device VkDevice, which basically allows 
-    us to interact with the physical device. 
-    */
-  VkDevice device;
 
-  /*
-    The pipeline specifies the pipeline that all graphics and compute commands pass though in Vulkan.
-    We will be creating a simple compute pipeline in this application. 
-    */
-  VkPipeline       pipeline;
-  VkPipelineLayout pipelineLayout;
+
+
   VkShaderModule   computeShaderModule;
-
-  /*
-    The command buffer is used to record commands, that will be submitted to a queue.
-    To allocate such command buffers, we use a command pool.
-    */
-  VkCommandPool   commandPool;
-  VkCommandBuffer commandBuffer;
-
-  /*
-    Descriptors represent resources in shaders. They allow us to use things like
-    uniform buffers, storage buffers and images in GLSL. 
-    A single descriptor represents a single resource, and several descriptors are organized
-    into descriptor sets, which are basically just collections of descriptors.
-    */
-  VkDescriptorPool      descriptorPool;
-  VkDescriptorSet       descriptorSet;
-  VkDescriptorSetLayout descriptorSetLayout;
 
   /*
     The mandelbrot set will be rendered to this buffer.
@@ -202,34 +166,13 @@ public:
 
   uint32_t bufferSize;  // size of `buffer` in bytes.
 
-  std::vector<const char*> enabledLayers;
-
-  /*
-    In order to execute commands on a device(GPU), the commands must be submitted
-    to a queue. The commands are stored in a command buffer, and this command buffer
-    is given to the queue. 
-    There will be different kinds of queues on the device. Not all queues support
-    graphics operations, for instance. For this application, we at least want a queue
-    that supports compute operations. 
-    */
-  VkQueue queue;  // a queue supporting compute operations.
-
-  /*
-    Groups of queues that have the same capabilities(for instance, they all supports graphics and computer operations),
-    are grouped into queue families. 
-    
-    When submitting a command buffer, you must specify to which queue in the family you are submitting to. 
-    This variable keeps track of the index of that queue in its family. 
-    */
-  uint32_t queueFamilyIndex;
-
 public:
 
   void saveRenderedImage()
   {
     void* mappedMemory = NULL;
     // Map the buffer memory, so that we can read from it on the CPU.
-    vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
+    vkMapMemory(m_device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
     Pixel* pmappedMemory = (Pixel*)mappedMemory;
 
     // Get the color data from the buffer, and cast it to bytes.
@@ -244,7 +187,7 @@ public:
       image.push_back((unsigned char)(255.0f * (pmappedMemory[i].a)));
     }
     // Done reading, so unmap.
-    vkUnmapMemory(device, bufferMemory);
+    vkUnmapMemory(m_device, bufferMemory);
 
     // Now we save the acquired color data to a .png.
     unsigned error = lodepng::encode("mandelbrot.png", image, WIDTH, HEIGHT);
@@ -252,281 +195,13 @@ public:
       printf("encoder error %d: %s", error, lodepng_error_text(error));
   }
 
-  static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(VkDebugReportFlagsEXT      flags,
-                                                              VkDebugReportObjectTypeEXT objectType,
-                                                              uint64_t                   object,
-                                                              size_t                     location,
-                                                              int32_t     messageCode,
-                                                              const char* pLayerPrefix,
-                                                              const char* pMessage,
-                                                              void*       pUserData)
-  {
-
-    printf("Debug Report: %s: %s\n", pLayerPrefix, pMessage);
-
-    return VK_FALSE;
-  }
-
-  void createInstance()
-  {
-    std::vector<const char*> enabledExtensions;
-    bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
-    /*
-        By enabling validation layers, Vulkan will emit warnings if the API
-        is used incorrectly. We shall enable the layer VK_LAYER_LUNARG_standard_validation,
-        which is basically a collection of several useful validation layers.
-        */
-    //if(enableValidationLayers)
-    //{
-    //  /*
-    //        We get all supported layers with vkEnumerateInstanceLayerProperties.
-    //        */
-    //  uint32_t layerCount;
-    //  vkEnumerateInstanceLayerProperties(&layerCount, NULL);
-
-    //  std::vector<VkLayerProperties> layerProperties(layerCount);
-    //  vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
-
-    //  /*
-    //        And then we simply check if VK_LAYER_LUNARG_standard_validation is among the supported layers.
-    //        */
-    //  bool foundLayer = false;
-    //  for(VkLayerProperties prop : layerProperties)
-    //  {
-
-    //    if(strcmp("VK_LAYER_LUNARG_standard_validation", prop.layerName) == 0)
-    //    {
-    //      foundLayer = true;
-    //      break;
-    //    }
-    //  }
-
-    //  if(!foundLayer)
-    //  {
-    //    throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
-    //  }
-    //  enabledLayers.push_back(
-    //      "VK_LAYER_LUNARG_standard_validation");  // Alright, we can use this layer.
-
-    //  /*
-    //        We need to enable an extension named VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
-    //        in order to be able to print the warnings emitted by the validation layer.
-    //        So again, we just check if the extension is among the supported extensions.
-    //        */
-
-    //  uint32_t extensionCount;
-
-    //  vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
-    //  std::vector<VkExtensionProperties> extensionProperties(extensionCount);
-    //  vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties.data());
-
-    //  bool foundExtension = false;
-    //  for(VkExtensionProperties prop : extensionProperties)
-    //  {
-    //    if(strcmp(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, prop.extensionName) == 0)
-    //    {
-    //      foundExtension = true;
-    //      break;
-    //    }
-    //  }
-
-    //  if(!foundExtension)
-    //  {
-    //    throw std::runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
-    //  }
-    //  enabledExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-    //}
-
-    /*
-        Next, we actually create the instance.
-        
-        */
-
-    /*
-        Contains application info. This is actually not that important.
-        The only real important field is apiVersion.
-        */
-    VkApplicationInfo applicationInfo  = {};
-    applicationInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    applicationInfo.pApplicationName   = "Hello world app";
-    applicationInfo.applicationVersion = 0;
-    applicationInfo.pEngineName        = "awesomeengine";
-    applicationInfo.engineVersion      = 0;
-    applicationInfo.apiVersion         = VK_API_VERSION_1_0;
-    ;
-
-    VkInstanceCreateInfo createInfo = {};
-    createInfo.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.flags                = 0;
-    createInfo.pApplicationInfo     = &applicationInfo;
-
-    // Give our desired layers and extensions to vulkan.
-    createInfo.enabledLayerCount       = enabledLayers.size();
-    createInfo.ppEnabledLayerNames     = enabledLayers.data();
-    createInfo.enabledExtensionCount   = enabledExtensions.size();
-    createInfo.ppEnabledExtensionNames = enabledExtensions.data();
-
-    /*
-        Actually create the instance.
-        Having created the instance, we can actually start using vulkan.
-        */
-    NVVK_CHECK(vkCreateInstance(&createInfo, NULL, &instance));
-
-    /*
-        Register a callback function for the extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME, so that warnings emitted from the validation
-        layer are actually printed.
-        */
-    //if(enableValidationLayers)
-    //{
-    //  VkDebugReportCallbackCreateInfoEXT createInfo = {};
-    //  createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-    //  createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT
-    //                     | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-    //  createInfo.pfnCallback = &debugReportCallbackFn;
-
-    //  // We have to explicitly load this function.
-    //  auto vkCreateDebugReportCallbackEXT =
-    //      (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance,
-    //                                                                "vkCreateDebugReportCallbackEX"
-    //                                                                "T");
-    //  if(vkCreateDebugReportCallbackEXT == nullptr)
-    //  {
-    //    throw std::runtime_error("Could not load vkCreateDebugReportCallbackEXT");
-    //  }
-
-    //  // Create and register callback.
-    //  NVVK_CHECK(
-    //      vkCreateDebugReportCallbackEXT(instance, &createInfo, NULL, &debugReportCallback));
-    //}
-  }
-
-  void findPhysicalDevice()
-  {
-    /*
-        In this function, we find a physical device that can be used with Vulkan.
-        */
-
-    /*
-        So, first we will list all physical devices on the system with vkEnumeratePhysicalDevices .
-        */
-    uint32_t deviceCount;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
-    if(deviceCount == 0)
-    {
-      throw std::runtime_error("could not find a device with vulkan support");
-    }
-
-    std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-    /*
-        Next, we choose a device that can be used for our purposes. 
-        With VkPhysicalDeviceFeatures(), we can retrieve a fine-grained list of physical features supported by the device.
-        However, in this demo, we are simply launching a simple compute shader, and there are no 
-        special physical features demanded for this task.
-        With VkPhysicalDeviceProperties(), we can obtain a list of physical device properties. Most importantly,
-        we obtain a list of physical device limitations. For this application, we launch a compute shader,
-        and the maximum size of the workgroups and total number of compute shader invocations is limited by the physical device,
-        and we should ensure that the limitations named maxComputeWorkGroupCount, maxComputeWorkGroupInvocations and 
-        maxComputeWorkGroupSize are not exceeded by our application.  Moreover, we are using a storage buffer in the compute shader,
-        and we should ensure that it is not larger than the device can handle, by checking the limitation maxStorageBufferRange. 
-        However, in our application, the workgroup size and total number of shader invocations is relatively small, and the storage buffer is
-        not that large, and thus a vast majority of devices will be able to handle it. This can be verified by looking at some devices at_
-        http://vulkan.gpuinfo.org/
-        Therefore, to keep things simple and clean, we will not perform any such checks here, and just pick the first physical
-        device in the list. But in a real and serious application, those limitations should certainly be taken into account.
-        */
-    for(VkPhysicalDevice device : devices)
-    {
-      if(true)
-      {  // As above stated, we do no feature checks, so just accept.
-        physicalDevice = device;
-        break;
-      }
-    }
-  }
-
-  // Returns the index of a queue family that supports compute operations.
-  uint32_t getComputeQueueFamilyIndex()
-  {
-    uint32_t queueFamilyCount;
-
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
-
-    // Retrieve all queue families.
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
-                                             queueFamilies.data());
-
-    // Now find a family that supports compute.
-    uint32_t i = 0;
-    for(; i < queueFamilies.size(); ++i)
-    {
-      VkQueueFamilyProperties props = queueFamilies[i];
-
-      if(props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT))
-      {
-        // found a queue with compute. We're done!
-        break;
-      }
-    }
-
-    if(i == queueFamilies.size())
-    {
-      throw std::runtime_error("could not find a queue family that supports operations");
-    }
-
-    return i;
-  }
-
-  void createDevice()
-  {
-    /*
-        We create the logical device in this function.
-        */
-
-    /*
-        When creating the device, we also specify what queues it has.
-        */
-    VkDeviceQueueCreateInfo queueCreateInfo = {};
-    queueCreateInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueFamilyIndex = getComputeQueueFamilyIndex();  // find queue family with compute capability.
-    queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-    queueCreateInfo.queueCount       = 1;  // create one queue in this family. We don't need more.
-    float queuePriorities = 1.0;           // we only have one queue, so this is not that imporant.
-    queueCreateInfo.pQueuePriorities = &queuePriorities;
-
-    /*
-        Now we create the logical device. The logical device allows us to interact with the physical
-        device.
-        */
-    VkDeviceCreateInfo deviceCreateInfo = {};
-
-    // Specify any desired device features here. We do not need any for this application, though.
-    VkPhysicalDeviceFeatures deviceFeatures = {};
-
-    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.enabledLayerCount =
-        enabledLayers.size();  // need to specify validation layers here as well.
-    deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
-    deviceCreateInfo.pQueueCreateInfos =
-        &queueCreateInfo;  // when creating the logical device, we also specify what queues it has.
-    deviceCreateInfo.queueCreateInfoCount = 1;
-    deviceCreateInfo.pEnabledFeatures     = &deviceFeatures;
-
-    NVVK_CHECK(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL,
-                                   &device));  // create logical device.
-
-    // Get a handle to the only member of the queue family.
-    vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-  }
-
+  
   // find memory type with desired properties.
   uint32_t findMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags properties)
   {
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memoryProperties);
 
     /*
         How does this search work?
@@ -555,9 +230,9 @@ public:
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage buffer.
     bufferCreateInfo.sharingMode =
         VK_SHARING_MODE_EXCLUSIVE;  // buffer is exclusive to a single queue family at a time.
-
+    VkDevice device = m_device;
     NVVK_CHECK(vkCreateBuffer(device, &bufferCreateInfo, NULL, &buffer));  // create buffer.
-
+    m_device = device;
     /*
         But the buffer doesn't allocate memory for itself, so we must do that manually.
         */
@@ -566,7 +241,7 @@ public:
         First, we find the memory requirements for the buffer.
         */
     VkMemoryRequirements memoryRequirements;
-    vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
+    vkGetBufferMemoryRequirements(m_device, buffer, &memoryRequirements);
 
     /*
         Now use obtained memory requirements info to allocate the memory for the buffer.
@@ -587,15 +262,16 @@ public:
         findMemoryType(memoryRequirements.memoryTypeBits,
                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    NVVK_CHECK(vkAllocateMemory(device, &allocateInfo, NULL,
+    NVVK_CHECK(vkAllocateMemory(m_device, &allocateInfo, NULL,
                                      &bufferMemory));  // allocate memory on device.
 
     // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory.
-    NVVK_CHECK(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+    NVVK_CHECK(vkBindBufferMemory(m_device, buffer, bufferMemory, 0));
   }
 
   void createComputeDescriptorSetLayout()
   {
+    VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
     /*
         Here we specify a descriptor set layout. This allows us to bind our descriptors to 
         resources in the shader. 
@@ -620,12 +296,18 @@ public:
     descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding;
 
     // Create the descriptor set layout.
-    NVVK_CHECK(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL,
+    NVVK_CHECK(vkCreateDescriptorSetLayout(m_device, &descriptorSetLayoutCreateInfo, NULL,
                                                 &descriptorSetLayout));
+
+    m_descSetLayout = descriptorSetLayout;
   }
 
   void createDescriptorSet()
   {
+    VkDescriptorPool descriptorPool = m_descPool;
+    VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
+    VkDescriptorSet       descriptorSet       = m_descSet;
+
     /*
         So we will allocate a descriptor set here.
         But we need to first create a descriptor pool to do that. 
@@ -647,7 +329,7 @@ public:
 
     // create descriptor pool.
     NVVK_CHECK(
-        vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
+        vkCreateDescriptorPool(m_device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
 
     /*
         With the pool allocated, we can now allocate the descriptor set. 
@@ -659,7 +341,7 @@ public:
     descriptorSetAllocateInfo.pSetLayouts        = &descriptorSetLayout;
 
     // allocate descriptor set.
-    NVVK_CHECK(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
+    NVVK_CHECK(vkAllocateDescriptorSets(m_device, &descriptorSetAllocateInfo, &descriptorSet));
 
     /*
         Next, we need to connect our actual storage buffer with the descrptor. 
@@ -681,7 +363,11 @@ public:
     writeDescriptorSet.pBufferInfo          = &descriptorBufferInfo;
 
     // perform the update of the descriptor set.
-    vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+    vkUpdateDescriptorSets(m_device, 1, &writeDescriptorSet, 0, NULL);
+
+    m_descPool  = descriptorPool;
+    m_descSetLayout = descriptorSetLayout;
+    m_descSet       = descriptorSet;
   }
 
   // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -719,6 +405,9 @@ public:
 
   void createComputePipeline()
   {
+    VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
+    VkPipeline pipeline = m_graphicsPipeline;
+    VkPipelineLayout pipelineLayout = m_pipelineLayout;
     /*
         We create a compute pipeline here. 
         */
@@ -739,7 +428,7 @@ public:
     createInfo.pCode                    = reinterpret_cast<const uint32_t*>(v.data());
     createInfo.codeSize                 = v.size();
 
-    NVVK_CHECK(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
+    NVVK_CHECK(vkCreateShaderModule(m_device, &createInfo, NULL, &computeShaderModule));
 
     /*
         Now let us actually create the compute pipeline.
@@ -762,7 +451,7 @@ public:
     pipelineLayoutCreateInfo.setLayoutCount = 1;
     pipelineLayoutCreateInfo.pSetLayouts    = &descriptorSetLayout;
     NVVK_CHECK(
-        vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
+        vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
 
     VkComputePipelineCreateInfo pipelineCreateInfo = {};
     pipelineCreateInfo.sType                       = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -773,11 +462,21 @@ public:
         Now, we finally create the compute pipeline. 
         */
     NVVK_CHECK(
-        vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
+        vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
+
+    m_graphicsPipeline = pipeline;
+    m_pipelineLayout   = pipelineLayout;
+    m_descSetLayout    = descriptorSetLayout;
   }
 
-  void createCommandBuffer()
+  void createCommandBuffer(uint32_t& _queueFamilyIndex)
   {
+    VkDescriptorSet    descriptorSet  = m_descSet;
+    VkPipeline pipeline = m_graphicsPipeline;
+    VkPipelineLayout pipelineLayout = m_pipelineLayout;
+    VkCommandPool    commandPool    = m_cmdPool;
+    VkCommandBuffer  commandBuffer;
+
     /*
         We are getting closer to the end. In order to send commands to the device(GPU),
         we must first record commands into a command buffer.
@@ -788,8 +487,8 @@ public:
     commandPoolCreateInfo.flags                   = 0;
     // the queue family of this command pool. All command buffers allocated from this command pool,
     // must be submitted to queues of this family ONLY.
-    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-    NVVK_CHECK(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
+    commandPoolCreateInfo.queueFamilyIndex = _queueFamilyIndex;
+    NVVK_CHECK(vkCreateCommandPool(m_device, &commandPoolCreateInfo, NULL, &commandPool));
 
     /*
         Now allocate a command buffer from the command pool. 
@@ -803,7 +502,7 @@ public:
     // submitted to a queue. To keep things simple, we use a primary command buffer.
     commandBufferAllocateInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     commandBufferAllocateInfo.commandBufferCount = 1;  // allocate a single command buffer.
-    NVVK_CHECK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo,
+    NVVK_CHECK(vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo,
                                              &commandBuffer));  // allocate command buffer.
 
     /*
@@ -832,10 +531,17 @@ public:
                   (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
 
     NVVK_CHECK(vkEndCommandBuffer(commandBuffer));  // end recording commands.
+
+    m_graphicsPipeline = pipeline;
+    m_pipelineLayout   = pipelineLayout;
+    m_cmdPool          = commandPool;
+    m_commandBuffers.push_back(commandBuffer);
+    m_descSet = descriptorSet;
   }
 
   void runCommandBuffer()
   {
+    VkCommandBuffer commandBuffer = m_commandBuffers[0];
     /*
         Now we shall finally submit the recorded command buffer to a queue.
         */
@@ -852,12 +558,12 @@ public:
     VkFenceCreateInfo fenceCreateInfo = {};
     fenceCreateInfo.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCreateInfo.flags             = 0;
-    NVVK_CHECK(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
+    NVVK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, NULL, &fence));
 
     /*
         We submit the command buffer on the queue, at the same time giving a fence.
         */
-    NVVK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
+    NVVK_CHECK(vkQueueSubmit(m_queue, 1, &submitInfo, fence));
     /*
         The command will not have finished executing until the fence is signalled.
         So we wait here.
@@ -865,39 +571,10 @@ public:
         and we will not be sure that the command has finished executing unless we wait for the fence.
         Hence, we use a fence here.
         */
-    NVVK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000));
+    NVVK_CHECK(vkWaitForFences(m_device, 1, &fence, VK_TRUE, 100000000000));
 
-    vkDestroyFence(device, fence, NULL);
-  }
+    vkDestroyFence(m_device, fence, NULL);
 
-  void cleanup()
-  {
-    /*
-        Clean up all Vulkan Resources. 
-        */
-
-    //if(enableValidationLayers)
-    //{
-    //  // destroy callback.
-    //  auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance,
-    //                                                                         "vkDestroyDebugReportC"
-    //                                                                         "allbackEXT");
-    //  if(func == nullptr)
-    //  {
-    //    throw std::runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
-    //  }
-    //  func(instance, debugReportCallback, NULL);
-    //}
-
-    vkFreeMemory(device, bufferMemory, NULL);
-    vkDestroyBuffer(device, buffer, NULL);
-    vkDestroyShaderModule(device, computeShaderModule, NULL);
-    vkDestroyDescriptorPool(device, descriptorPool, NULL);
-    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
-    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
-    vkDestroyPipeline(device, pipeline, NULL);
-    vkDestroyCommandPool(device, commandPool, NULL);
-    vkDestroyDevice(device, NULL);
-    vkDestroyInstance(instance, NULL);
+    m_commandBuffers[0] = commandBuffer;
   }
 };

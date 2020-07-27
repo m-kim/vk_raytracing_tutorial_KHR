@@ -126,38 +126,38 @@ int main(int argc, char** argv)
   // Enabling the extension feature
   vk::PhysicalDeviceRayTracingFeaturesKHR raytracingFeature;
 
-//  // Requesting Vulkan extensions and layers
-//  nvvk::ContextCreateInfo contextInfo(true);
-//  contextInfo.setVersion(1, 2);
-//  contextInfo.addInstanceLayer("VK_LAYER_LUNARG_monitor", true);
-//  contextInfo.addInstanceExtension(VK_KHR_SURFACE_EXTENSION_NAME);
-//#ifdef WIN32
-//  contextInfo.addInstanceExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-//#else
-//  contextInfo.addInstanceExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-//  contextInfo.addInstanceExtension(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-//#endif
-//  contextInfo.addInstanceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
-//  // #VKRay: Activate the ray tracing extension
-//  contextInfo.addDeviceExtension(VK_KHR_RAY_TRACING_EXTENSION_NAME, false, &raytracingFeature);
-//  contextInfo.addDeviceExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-//  contextInfo.addDeviceExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-//
-//
-//  // Creating Vulkan base application
-//  nvvk::Context vkctx{};
-//  vkctx.initInstance(contextInfo);
-//  // Find all compatible devices
-//  auto compatibleDevices = vkctx.getCompatibleDevices(contextInfo);
-//  assert(!compatibleDevices.empty());
-//  // Use a compatible device
-//  vkctx.initDevice(compatibleDevices[0], contextInfo);
-//
+  // Requesting Vulkan extensions and layers
+  nvvk::ContextCreateInfo contextInfo(true);
+  contextInfo.setVersion(1, 2);
+  contextInfo.addInstanceLayer("VK_LAYER_LUNARG_monitor", true);
+  contextInfo.addInstanceExtension(VK_KHR_SURFACE_EXTENSION_NAME);
+#ifdef WIN32
+  contextInfo.addInstanceExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#else
+  contextInfo.addInstanceExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+  contextInfo.addInstanceExtension(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#endif
+  contextInfo.addInstanceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+  // #VKRay: Activate the ray tracing extension
+  contextInfo.addDeviceExtension(VK_KHR_RAY_TRACING_EXTENSION_NAME, false, &raytracingFeature);
+  contextInfo.addDeviceExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+  contextInfo.addDeviceExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+
+
+  // Creating Vulkan base application
+  nvvk::Context vkctx{};
+  vkctx.initInstance(contextInfo);
+  // Find all compatible devices
+  auto compatibleDevices = vkctx.getCompatibleDevices(contextInfo);
+  assert(!compatibleDevices.empty());
+  // Use a compatible device
+  vkctx.initDevice(compatibleDevices[0], contextInfo);
+
 
   // Create example
   HelloVulkan helloVk;
@@ -166,19 +166,16 @@ int main(int argc, char** argv)
   //const vk::SurfaceKHR surface = helloVk.getVkSurface(vkctx.m_instance, window);
   //vkctx.setGCTQueueWithPresent(surface);
 
-  //helloVk.setup(vkctx.m_instance, vkctx.m_device, vkctx.m_physicalDevice,
-  //              vkctx.m_queueGCT.familyIndex);
+  helloVk.setup(vkctx.m_instance, vkctx.m_device, vkctx.m_physicalDevice,
+                vkctx.m_queueGCT.familyIndex);
   //helloVk.createSurface(surface, SAMPLE_WIDTH, SAMPLE_HEIGHT);
 
   //helloVk.m_bufferSize = SAMPLE_WIDTH * SAMPLE_HEIGHT * 4 * 4;
-  helloVk.createInstance();
-  helloVk.findPhysicalDevice();
-  helloVk.createDevice();
   helloVk.createComputeBuffer();
   helloVk.createComputeDescriptorSetLayout();
   helloVk.createDescriptorSet();
   helloVk.createComputePipeline();
-  helloVk.createCommandBuffer();
+  helloVk.createCommandBuffer(vkctx.m_queueGCT.familyIndex);
 
   helloVk.runCommandBuffer();
   helloVk.saveRenderedImage();
@@ -314,7 +311,7 @@ int main(int argc, char** argv)
   helloVk.destroyResources();
   helloVk.destroy();
 
-  //vkctx.deinit();
+  vkctx.deinit();
 
   //glfwDestroyWindow(window);
   glfwTerminate();
