@@ -275,7 +275,7 @@ void HelloVulkan::createTextureImages(const vk::CommandBuffer&        cmdBuf,
     vk::DeviceSize         bufferSize      = sizeof(color);
     auto                   imgSize         = vk::Extent2D(1, 1);
     auto                   imageCreateInfo = nvvk::makeImage2DCreateInfo(imgSize, format);
-
+    imageCreateInfo.setUsage(vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
     // Creating the dummy texure
     nvvk::Image image = m_alloc.createImage(cmdBuf, bufferSize, color.data(), imageCreateInfo);
     vk::ImageViewCreateInfo ivInfo = nvvk::makeImageViewCreateInfo(image.image, imageCreateInfo);

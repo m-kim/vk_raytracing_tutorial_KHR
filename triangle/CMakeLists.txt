@@ -56,8 +56,8 @@ source_group(Shader_Files FILES ${GLSL_SOURCES})
 # else()
 #   add_definitions(-fpermissive)
 # endif()
-add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_SOURCES} ${CUDA_FILES} ${CUBIN_SOURCES})
-
+add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${BASE_DIRECTORY}/lodepng/lodepng.cpp ${GLSL_SOURCES} ${CUDA_FILES} ${CUBIN_SOURCES})
+include_directories(${BASE_DIRECTORY}/lodepng)
 #_set_subsystem_console(${PROJNAME})
 
 #####################################################################################

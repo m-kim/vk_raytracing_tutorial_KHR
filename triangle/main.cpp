@@ -192,11 +192,11 @@ int main(int argc, char** argv)
   ImGui_ImplGlfw_InitForVulkan(window, true);
 
   // Main loop
-  while(!glfwWindowShouldClose(window))
+  //while(!glfwWindowShouldClose(window))
   {
     glfwPollEvents();
-    if(helloVk.isMinimized())
-      continue;
+    //if(helloVk.isMinimized())
+    //  continue;
 
     // Start the Dear ImGui frame
     ImGui_ImplGlfw_NewFrame();
@@ -244,6 +244,7 @@ int main(int argc, char** argv)
       helloVk.rasterize(cmdBuff);
       cmdBuff.endRenderPass();
     }
+    helloVk.saveRenderedImage();
 
 
     // 2nd rendering pass: tone mapper, UI
@@ -267,6 +268,7 @@ int main(int argc, char** argv)
     cmdBuff.end();
     helloVk.submitFrame();
   }
+
 
   // Cleanup
   helloVk.getDevice().waitIdle();
