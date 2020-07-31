@@ -43,6 +43,7 @@ extern std::vector<std::string> defaultSearchPaths;
 #include "nvvk/commands_vk.hpp"
 #include "nvvk/renderpasses_vk.hpp"
 
+#include <lodepng.h>
 
 // Holding the camera matrices
 struct CameraMatrices
@@ -557,3 +558,209 @@ void HelloVulkan::onResize(int /*w*/, int /*h*/)
 }
 
 
+  void HelloVulkan::saveRenderedImage()
+{
+
+  using vkBU = vk::BufferUsageFlagBits;
+  using vkMP = vk::MemoryPropertyFlagBits;
+
+  //uint32_t imageIndex = m_swapChain.getActiveImageIndex();
+  //VkImage  srcImage   = m_swapChain.getImage(imageIndex);
+  VkImage           srcImage      = m_swapChain.getActiveImage();
+  VkImageCreateInfo imageCreateCI = {};
+
+  imageCreateCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+
+  imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
+  // Note that vkCmdBlitImage (if supported) will also do format conversions if the swapchain color format would differ
+  imageCreateCI.format        = VK_FORMAT_R8G8B8A8_UNORM;  //VK_FORMAT_R32G32B32A32_SFLOAT;
+  imageCreateCI.extent.width  = m_size.width;
+  imageCreateCI.extent.height = m_size.height;
+  imageCreateCI.extent.depth  = 1;
+  imageCreateCI.arrayLayers   = 1;
+  imageCreateCI.mipLevels     = 1;
+  imageCreateCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageCreateCI.samples       = VK_SAMPLE_COUNT_1_BIT;
+  imageCreateCI.tiling        = VK_IMAGE_TILING_LINEAR;
+  imageCreateCI.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  imageCreateCI.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+  //imageCreateCI = nvvk::makeImage2DCreateInfo(m_size, m_offscreenColorFormat,
+  //                                            vk::ImageUsageFlagBits::eTransferDst);
+  //imageCreateCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+
+  //// Create the image
+  VkImage dstImage;
+  NVVK_CHECK(vkCreateImage(m_device, &imageCreateCI, nullptr, &dstImage));
+
+  //// Create memory to back up the image
+  VkMemoryRequirements memRequirements = {};
+  VkMemoryAllocateInfo memAllocInfo{};
+  memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  VkDeviceMemory dstImageMemory;
+  vkGetImageMemoryRequirements(m_device, dstImage, &memRequirements);
+
+  memAllocInfo.allocationSize = memRequirements.size;
+  // Memory must be host visible to copy from
+  memAllocInfo.memoryTypeIndex =
+      findMemoryType(memRequirements.memoryTypeBits,
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  NVVK_CHECK(vkAllocateMemory(m_device, &memAllocInfo, nullptr, &dstImageMemory));
+  NVVK_CHECK(vkBindImageMemory(m_device, dstImage, dstImageMemory, 0));
+
+  //// Do the actual blit from the swapchain image to our host visible destination image
+  //nvvk::CommandPool genCmdBuf(m_device, m_graphicsQueueIndex);
+  //auto              cmdBuf = genCmdBuf.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+  VkCommandBufferAllocateInfo cmdBufAllocateInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+  cmdBufAllocateInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  cmdBufAllocateInfo.commandPool        = m_cmdPool;
+  cmdBufAllocateInfo.commandBufferCount = 1;
+  VkCommandBuffer cmdBuffer;
+  NVVK_CHECK(vkAllocateCommandBuffers(m_device, &cmdBufAllocateInfo, &cmdBuffer));
+  VkCommandBufferBeginInfo cmdBufInfo{};
+  cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  NVVK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+
+
+  //nvvk::cmdBarrierImageLayout(cmdBuffer, dstImage, VK_IMAGE_LAYOUT_UNDEFINED,
+  //                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  VkImageMemoryBarrier imageMemoryBarrier{};
+  imageMemoryBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imageMemoryBarrier.srcAccessMask       = 0;
+  imageMemoryBarrier.dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+  imageMemoryBarrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageMemoryBarrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  imageMemoryBarrier.subresourceRange =
+      VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  imageMemoryBarrier.image = dstImage;
+  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                       0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+
+
+  //nvvk::cmdBarrierImageLayout(cmdBuffer, srcImage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+  //                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+  VkImageMemoryBarrier imb2{};
+  imb2.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb2.srcAccessMask       = VK_ACCESS_MEMORY_READ_BIT;
+  imb2.dstAccessMask       = VK_ACCESS_TRANSFER_READ_BIT;
+  imb2.oldLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  imb2.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  imb2.subresourceRange    = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  imb2.image               = srcImage;
+  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                       0, nullptr, 0, nullptr, 1, &imb2);
+
+  bool supportsBlit = 0;
+  if(supportsBlit)
+  {
+    // Define the region to blit (we will blit the whole swapchain image)
+    VkOffset3D blitSize;
+    blitSize.x = m_size.width;
+    blitSize.y = m_size.height;
+    blitSize.z = 1;
+    VkImageBlit imageBlitRegion{};
+    imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlitRegion.srcSubresource.layerCount = 1;
+    imageBlitRegion.srcOffsets[1]             = blitSize;
+    imageBlitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlitRegion.dstSubresource.layerCount = 1;
+    imageBlitRegion.dstOffsets[1]             = blitSize;
+
+    // Issue the blit command
+    vkCmdBlitImage(cmdBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlitRegion, VK_FILTER_NEAREST);
+  }
+  else
+  {
+
+    // Otherwise use image copy (requires us to manually flip components)
+    VkImageCopy imageCopyRegion{};
+    imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageCopyRegion.srcSubresource.layerCount = 1;
+    imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageCopyRegion.dstSubresource.layerCount = 1;
+    imageCopyRegion.extent.width              = m_size.width;
+    imageCopyRegion.extent.height             = m_size.height;
+    imageCopyRegion.extent.depth              = 1;
+
+    // Issue the copy command
+    vkCmdCopyImage(cmdBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageCopyRegion);
+  }
+  //nvvk::cmdBarrierImageLayout(cmdBuffer, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  //                            VK_IMAGE_LAYOUT_GENERAL);
+  VkImageMemoryBarrier imb3{};
+  imb3.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb3.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb3.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb3.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+  imb3.dstAccessMask       = VK_ACCESS_MEMORY_READ_BIT;
+  imb3.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  imb3.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+  imb3.subresourceRange    = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  imb3.image               = dstImage;
+  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                       0, nullptr, 0, nullptr, 1, &imb3);
+
+
+  //nvvk::cmdBarrierImageLayout(cmdBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  //                            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+  VkImageMemoryBarrier imb4{};
+  imb4.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb4.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb4.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb4.srcAccessMask       = VK_ACCESS_TRANSFER_READ_BIT;
+  imb4.dstAccessMask       = VK_ACCESS_MEMORY_READ_BIT;
+  imb4.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  imb4.newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  imb4.subresourceRange    = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  imb4.image               = srcImage;
+  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                       0, nullptr, 0, nullptr, 1, &imb4);
+
+
+  NVVK_CHECK(vkEndCommandBuffer(cmdBuffer));
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers    = &cmdBuffer;
+  // Create fence to ensure that the command buffer has finished executing
+  VkFenceCreateInfo fenceInfo{};  //= vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = 0;
+
+  VkFence fence;
+  NVVK_CHECK(vkCreateFence(m_device, &fenceInfo, nullptr, &fence));
+  // Submit to the queue
+  NVVK_CHECK(vkQueueSubmit(m_queue, 1, &submitInfo, fence));
+  // Wait for the fence to signal that command buffer has finished executing
+  NVVK_CHECK(vkWaitForFences(m_device, 1, &fence, VK_TRUE, 100000000000));
+  vkDestroyFence(m_device, fence, nullptr);
+  if(free)
+  {
+    vkFreeCommandBuffers(m_device, m_cmdPool, 1, &cmdBuffer);
+  }
+
+  // Get layout of the image (including row pitch)
+  VkImageSubresource  subResource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+  VkSubresourceLayout subResourceLayout;
+  vkGetImageSubresourceLayout(m_device, dstImage, &subResource, &subResourceLayout);
+
+  // Map image memory so we can start copying from it
+  const char* data;
+  vkMapMemory(m_device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
+  data += subResourceLayout.offset;
+  
+  lodepng::encode("output.png", (unsigned char*)data, m_size.width, m_size.height);
+
+  std::cout << "Screenshot saved to disk" << std::endl;
+
+  // Clean up resources
+  vkUnmapMemory(m_device, dstImageMemory);
+  vkFreeMemory(m_device, dstImageMemory, nullptr);
+  vkDestroyImage(m_device, dstImage, nullptr);
+}
