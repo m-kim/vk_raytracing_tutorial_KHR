@@ -67,7 +67,7 @@ public:
   auto addShader(const std::string&      code,
                                             vk::ShaderStageFlagBits stage,
                                             const char*             entryPoint = "main");
-
+  void saveRenderedImage();
   // The OBJ model
   struct ObjModel
   {
@@ -126,27 +126,5 @@ public:
 
 
 
-  // find memory type with desired properties.
-  //this is the same as getMemoryType *shrug*
-  uint32_t findMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags properties)
-  {
-    VkPhysicalDeviceMemoryProperties memoryProperties;
 
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memoryProperties);
-
-    /*
-        How does this search work?
-        See the documentation of VkPhysicalDeviceMemoryProperties for a detailed description. 
-        */
-    for(uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
-    {
-      if((memoryTypeBits & (1 << i))
-         && ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
-        return i;
-    }
-    throw "Can't find compatible mappable memory for image";
-    return -1;
-  }
-
-  void saveRenderedImage();
 };
