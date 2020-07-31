@@ -59,23 +59,6 @@ static void onErrorCallback(int error, const char* description)
   fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-// Extra UI
-void renderUI(HelloVulkan& helloVk)
-{
-  static int item = 1;
-  if(ImGui::Combo("Up Vector", &item, "X\0Y\0Z\0\0"))
-  {
-    nvmath::vec3f pos, eye, up;
-    CameraManip.getLookat(pos, eye, up);
-    up = nvmath::vec3f(item == 0, item == 1, item == 2);
-    CameraManip.setLookat(pos, eye, up);
-  }
-  ImGui::SliderFloat3("Light Position", &helloVk.m_pushConstant.lightPosition.x, -20.f, 20.f);
-  ImGui::SliderFloat("Light Intensity", &helloVk.m_pushConstant.lightIntensity, 0.f, 100.f);
-  ImGui::RadioButton("Point", &helloVk.m_pushConstant.lightType, 0);
-  ImGui::SameLine();
-  ImGui::RadioButton("Infinite", &helloVk.m_pushConstant.lightType, 1);
-}
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -167,6 +150,8 @@ int main(int argc, char** argv)
   helloVk.createSurface(surface, SAMPLE_WIDTH, SAMPLE_HEIGHT);
   helloVk.createDepthBuffer();
   helloVk.createRenderPass();
+  
+
   helloVk.createFrameBuffers();
 
   // Setup Imgui
@@ -175,16 +160,13 @@ int main(int argc, char** argv)
   // Creation of the example
   helloVk.loadModel(nvh::findFile("media/scenes/cube_multi.obj", defaultSearchPaths));
 
-  helloVk.createOffscreenRender();
+  //helloVk.createOffscreenRender();
   helloVk.createDescriptorSetLayout();
   helloVk.createGraphicsPipeline();
   helloVk.createUniformBuffer();
   helloVk.createSceneDescriptionBuffer();
   helloVk.updateDescriptorSet();
 
-  helloVk.createPostDescriptor();
-  helloVk.createPostPipeline();
-  helloVk.updatePostDescriptorSet();
   nvmath::vec4f clearColor = nvmath::vec4f(1, 1, 1, 1.00f);
 
 
@@ -205,15 +187,6 @@ int main(int argc, char** argv)
     // Updating camera buffer
     helloVk.updateUniformBuffer();
 
-    // Show UI window.
-    if(1 == 1)
-    {
-      ImGui::ColorEdit3("Clear color", reinterpret_cast<float*>(&clearColor));
-      renderUI(helloVk);
-      ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                  1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-      ImGui::Render();
-    }
 
     // Start rendering the scene
     helloVk.prepareFrame();
@@ -232,41 +205,23 @@ int main(int argc, char** argv)
 
     // Offscreen render pass
     {
-      vk::RenderPassBeginInfo offscreenRenderPassBeginInfo;
-      offscreenRenderPassBeginInfo.setClearValueCount(2);
-      offscreenRenderPassBeginInfo.setPClearValues(clearValues);
-      offscreenRenderPassBeginInfo.setRenderPass(helloVk.m_offscreenRenderPass);
-      offscreenRenderPassBeginInfo.setFramebuffer(helloVk.m_offscreenFramebuffer);
-      offscreenRenderPassBeginInfo.setRenderArea({{}, helloVk.getSize()});
+      vk::RenderPassBeginInfo renderPassBeginInfo;
+      renderPassBeginInfo.setClearValueCount(2);
+      renderPassBeginInfo.setPClearValues(clearValues);
+      renderPassBeginInfo.setRenderPass(helloVk.getRenderPass());
+      renderPassBeginInfo.setFramebuffer(helloVk.getFramebuffers()[curFrame]);
+      renderPassBeginInfo.setRenderArea({{}, helloVk.getSize()});
 
       // Rendering Scene
-      cmdBuff.beginRenderPass(offscreenRenderPassBeginInfo, vk::SubpassContents::eInline);
+      cmdBuff.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
       helloVk.rasterize(cmdBuff);
-      cmdBuff.endRenderPass();
-    }
-    helloVk.saveRenderedImage();
-
-
-    // 2nd rendering pass: tone mapper, UI
-    {
-      vk::RenderPassBeginInfo postRenderPassBeginInfo;
-      postRenderPassBeginInfo.setClearValueCount(2);
-      postRenderPassBeginInfo.setPClearValues(clearValues);
-      postRenderPassBeginInfo.setRenderPass(helloVk.getRenderPass());
-      postRenderPassBeginInfo.setFramebuffer(helloVk.getFramebuffers()[curFrame]);
-      postRenderPassBeginInfo.setRenderArea({{}, helloVk.getSize()});
-
-      cmdBuff.beginRenderPass(postRenderPassBeginInfo, vk::SubpassContents::eInline);
-      // Rendering tonemapper
-      helloVk.drawPost(cmdBuff);
-      // Rendering UI
-      ImGui::RenderDrawDataVK(cmdBuff, ImGui::GetDrawData());
       cmdBuff.endRenderPass();
     }
 
     // Submit for display
     cmdBuff.end();
     helloVk.submitFrame();
+    helloVk.saveRenderedImage();
   }
 
 

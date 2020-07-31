@@ -101,6 +101,7 @@ void HelloVulkan::createDescriptorSetLayout()
   m_descSetLayout = m_descSetLayoutBind.createLayout(m_device);
   m_descPool      = m_descSetLayoutBind.createPool(m_device, 1);
   m_descSet       = nvvk::allocateDescriptorSet(m_device, m_descPool, m_descSetLayout);
+
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -120,6 +121,27 @@ void HelloVulkan::updateDescriptorSet()
 }
 
 
+auto HelloVulkan::addShader(const std::string&      code,
+                                                       vk::ShaderStageFlagBits stage,
+                                                       const char*             entryPoint)
+{
+  std::vector<char> v;
+  std::copy(code.begin(), code.end(), std::back_inserter(v));
+
+  VkShaderModuleCreateInfo createInfo{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+  createInfo.codeSize = sizeof(char) * v.size();
+  createInfo.pCode    = reinterpret_cast<const uint32_t*>(v.data());
+  VkShaderModule shaderModule;
+  vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule);
+  //temporaryModules.push_back(shaderModule);
+  VkPipelineShaderStageCreateInfo shaderStage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+  shaderStage.stage  = (VkShaderStageFlagBits)stage;
+  shaderStage.module = shaderModule;
+  shaderStage.pName  = entryPoint;
+\
+  return std::make_tuple(shaderStage, shaderModule);
+}
+
 //--------------------------------------------------------------------------------------------------
 // Creating the pipeline layout
 //
@@ -131,7 +153,7 @@ void HelloVulkan::createGraphicsPipeline()
                                               sizeof(ObjPushConstant)};
 
   // Creating the Pipeline Layout
-  vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
+  vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
   vk::DescriptorSetLayout      descSetLayout(m_descSetLayout);
   pipelineLayoutCreateInfo.setSetLayoutCount(1);
   pipelineLayoutCreateInfo.setPSetLayouts(&descSetLayout);
@@ -139,21 +161,157 @@ void HelloVulkan::createGraphicsPipeline()
   pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstantRanges);
   m_pipelineLayout = m_device.createPipelineLayout(pipelineLayoutCreateInfo);
 
-  // Creating the Pipeline
-  std::vector<std::string>                paths = defaultSearchPaths;
-  nvvk::GraphicsPipelineGeneratorCombined gpb(m_device, m_pipelineLayout, m_offscreenRenderPass);
-  gpb.depthStencilState.depthTestEnable = true;
-  gpb.addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
-  gpb.addShader(nvh::loadFile("shaders/frag_shader.frag.spv", true, paths), vkSS::eFragment);
-  gpb.addBindingDescription({0, sizeof(VertexObj)});
-  gpb.addAttributeDescriptions(std::vector<vk::VertexInputAttributeDescription>{
-      {0, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, pos)},
-      {1, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, nrm)},
-      {2, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, color)},
-      {3, 0, vk::Format::eR32G32Sfloat, offsetof(VertexObj, texCoord)}});
+  //// Creating the Pipeline
+  //std::vector<std::string>                paths = defaultSearchPaths;
+  //nvvk::GraphicsPipelineGeneratorCombined gpb(m_device, m_pipelineLayout, m_renderPass);
+  //gpb.depthStencilState.depthTestEnable = true;
+  //gpb.addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
+  //gpb.addShader(nvh::loadFile("shaders/frag_shader.frag.spv", true, paths), vkSS::eFragment);
+  //gpb.addBindingDescription({0, sizeof(VertexObj)});
+  //gpb.addAttributeDescriptions(std::vector<vk::VertexInputAttributeDescription>{
+  //    {0, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, pos)},
+  //    {1, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, nrm)},
+  //    {2, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, color)},
+  //    {3, 0, vk::Format::eR32G32Sfloat, offsetof(VertexObj, texCoord)}});
 
-  m_graphicsPipeline = gpb.createPipeline();
-  m_debug.setObjectName(m_graphicsPipeline, "Graphics");
+  //m_graphicsPipeline = gpb.createPipeline();
+  //m_debug.setObjectName(m_graphicsPipeline, "Graphics");
+
+
+  VkPipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo{};
+  pipelineInputAssemblyStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+  pipelineInputAssemblyStateCreateInfo.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  pipelineInputAssemblyStateCreateInfo.flags                  = 0;
+  pipelineInputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+  VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo{};
+  pipelineRasterizationStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  pipelineRasterizationStateCreateInfo.polygonMode      = VK_POLYGON_MODE_FILL;
+  pipelineRasterizationStateCreateInfo.cullMode         = VK_CULL_MODE_BACK_BIT;
+  pipelineRasterizationStateCreateInfo.frontFace        = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  pipelineRasterizationStateCreateInfo.flags            = 0;
+  pipelineRasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
+  pipelineRasterizationStateCreateInfo.lineWidth        = 1.0f;
+
+  VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState{};
+  pipelineColorBlendAttachmentState.colorWriteMask = 0xf;
+  pipelineColorBlendAttachmentState.blendEnable    = VK_FALSE;
+
+  VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo{};
+  pipelineColorBlendStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  pipelineColorBlendStateCreateInfo.attachmentCount = 1;
+  pipelineColorBlendStateCreateInfo.pAttachments    = &pipelineColorBlendAttachmentState;
+
+  VkPipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo{};
+  pipelineDepthStencilStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  pipelineDepthStencilStateCreateInfo.depthTestEnable  = VK_TRUE;
+  pipelineDepthStencilStateCreateInfo.depthWriteEnable = VK_TRUE;
+  pipelineDepthStencilStateCreateInfo.depthCompareOp   = VK_COMPARE_OP_LESS_OR_EQUAL;
+  pipelineDepthStencilStateCreateInfo.back.compareOp   = VK_COMPARE_OP_ALWAYS;
+
+
+  VkPipelineViewportStateCreateInfo pipelineViewportStateCreateInfo{};
+  pipelineViewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  pipelineViewportStateCreateInfo.viewportCount = 1;
+  pipelineViewportStateCreateInfo.scissorCount  = 1;
+  pipelineViewportStateCreateInfo.flags         = 0;
+
+  VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo{};
+  pipelineMultisampleStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  pipelineMultisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  pipelineMultisampleStateCreateInfo.flags                = 0;
+
+  std::vector<VkDynamicState>      dynamicStateEnables = {VK_DYNAMIC_STATE_VIEWPORT,
+                                                     VK_DYNAMIC_STATE_SCISSOR};
+  VkPipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo{};
+  pipelineDynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  pipelineDynamicStateCreateInfo.pDynamicStates = dynamicStateEnables.data();
+  pipelineDynamicStateCreateInfo.dynamicStateCount =
+      static_cast<uint32_t>(dynamicStateEnables.size());
+  pipelineDynamicStateCreateInfo.flags = 0;
+
+  // Vertex bindings and attributes
+  // Binding description
+  VkVertexInputBindingDescription vInputBindDescription{};
+  vInputBindDescription.binding   = 0;
+  vInputBindDescription.stride    = sizeof(VertexObj);
+  vInputBindDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+  // Attribute descriptions
+  std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
+      vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat,
+                                          offsetof(VertexObj, pos)},
+      vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32B32Sfloat,
+                                          offsetof(VertexObj, nrm)},
+      vk::VertexInputAttributeDescription{2, 0, vk::Format::eR32G32B32Sfloat,
+                                          offsetof(VertexObj, color)},
+      vk::VertexInputAttributeDescription{3, 0, vk::Format::eR32G32Sfloat,
+                                          offsetof(VertexObj, texCoord)}};
+
+  VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo{};
+  pipelineVertexInputStateCreateInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+  VkPipelineVertexInputStateCreateInfo vertexInputState{};
+  vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(1);
+  vertexInputState.pVertexBindingDescriptions    = &vInputBindDescription;
+  vertexInputState.vertexAttributeDescriptionCount =
+      static_cast<uint32_t>(vertexInputAttributes.size());
+  vertexInputState.pVertexAttributeDescriptions = vertexInputAttributes.data();
+
+  //std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
+  //    loadShader(getShadersPath() + "screenshot/mesh.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+  //    loadShader(getShadersPath() + "screenshot/mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
+  //};
+  std::vector<VkShaderModule> shaderModules;
+  std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+
+  std::vector<std::string>    paths = defaultSearchPaths;
+  auto vertShad= addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
+  shaderStages.push_back(std::get<0>(vertShad));
+  shaderModules.push_back(std::get<1>(vertShad));
+  auto fragShad =
+      addShader(nvh::loadFile("shaders/frag_shader.frag.spv", true, paths), vkSS::eFragment);
+  shaderStages.push_back(std::get<0>(fragShad));
+  shaderModules.push_back(std::get<1>(fragShad));
+
+  //VkGraphicsPipelineCreateInfo pipelineCreateInfo =
+  //vks::initializers::pipelineCreateInfo(pipelineLayout, renderPass, 0);
+  VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
+  pipelineCreateInfo.sType              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  pipelineCreateInfo.layout             = m_pipelineLayout;
+  pipelineCreateInfo.renderPass         = m_renderPass;
+  pipelineCreateInfo.flags              = 0;
+  pipelineCreateInfo.basePipelineIndex  = -1;
+  pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+  pipelineCreateInfo.pInputAssemblyState = &pipelineInputAssemblyStateCreateInfo;
+  pipelineCreateInfo.pRasterizationState = &pipelineRasterizationStateCreateInfo;
+  pipelineCreateInfo.pColorBlendState    = &pipelineColorBlendStateCreateInfo;
+  pipelineCreateInfo.pMultisampleState   = &pipelineMultisampleStateCreateInfo;
+  pipelineCreateInfo.pViewportState      = &pipelineViewportStateCreateInfo;
+  pipelineCreateInfo.pDepthStencilState  = &pipelineDepthStencilStateCreateInfo;
+  pipelineCreateInfo.pDynamicState       = &pipelineDynamicStateCreateInfo;
+  pipelineCreateInfo.stageCount          = shaderStages.size();
+  pipelineCreateInfo.pStages             = shaderStages.data();
+  pipelineCreateInfo.pVertexInputState   = &vertexInputState;
+
+  VkPipeline pipeline = m_graphicsPipeline;
+  NVVK_CHECK(vkCreateGraphicsPipelines(m_device, m_pipelineCache, 1, &pipelineCreateInfo, nullptr,
+                                       &pipeline));
+  m_graphicsPipeline = pipeline;
+
+  for(auto mod : shaderModules)
+  {
+    vkDestroyShaderModule(m_device, mod, nullptr);
+  }
+
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -354,15 +512,7 @@ void HelloVulkan::destroyResources()
     m_alloc.destroy(t);
   }
 
-  //#Post
-  m_device.destroy(m_postPipeline);
-  m_device.destroy(m_postPipelineLayout);
-  m_device.destroy(m_postDescPool);
-  m_device.destroy(m_postDescSetLayout);
-  m_alloc.destroy(m_offscreenColor);
-  m_alloc.destroy(m_offscreenDepth);
-  m_device.destroy(m_offscreenRenderPass);
-  m_device.destroy(m_offscreenFramebuffer);
+
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -404,165 +554,6 @@ void HelloVulkan::rasterize(const vk::CommandBuffer& cmdBuf)
 //
 void HelloVulkan::onResize(int /*w*/, int /*h*/)
 {
-  createOffscreenRender();
-  updatePostDescriptorSet();
 }
 
 
-//////////////////////////////////////////////////////////////////////////
-// Post-processing
-//////////////////////////////////////////////////////////////////////////
-
-
-//--------------------------------------------------------------------------------------------------
-// Creating an offscreen frame buffer and the associated render pass
-//
-void HelloVulkan::createOffscreenRender()
-{
-  m_alloc.destroy(m_offscreenColor);
-  m_alloc.destroy(m_offscreenDepth);
-
-  // Creating the color image
-  {
-    auto colorCreateInfo = nvvk::makeImage2DCreateInfo(m_size, m_offscreenColorFormat,
-                                                       vk::ImageUsageFlagBits::eColorAttachment
-                                                           | vk::ImageUsageFlagBits::eSampled
-                                                           | vk::ImageUsageFlagBits::eStorage);
-
-
-    nvvk::ImageDedicated    image  = m_alloc.createImage(colorCreateInfo);
-    vk::ImageViewCreateInfo ivInfo = nvvk::makeImageViewCreateInfo(image.image, colorCreateInfo);
-    m_offscreenColor               = m_alloc.createTexture(image, ivInfo, vk::SamplerCreateInfo());
-    m_offscreenColor.descriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-  }
-
-  // Creating the depth buffer
-  auto depthCreateInfo =
-      nvvk::makeImage2DCreateInfo(m_size, m_offscreenDepthFormat,
-                                  vk::ImageUsageFlagBits::eDepthStencilAttachment);
-  {
-    nvvk::Image image = m_alloc.createImage(depthCreateInfo);
-
-    vk::ImageViewCreateInfo depthStencilView;
-    depthStencilView.setViewType(vk::ImageViewType::e2D);
-    depthStencilView.setFormat(m_offscreenDepthFormat);
-    depthStencilView.setSubresourceRange({vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1});
-    depthStencilView.setImage(image.image);
-
-    m_offscreenDepth = m_alloc.createTexture(image, depthStencilView);
-  }
-
-  // Setting the image layout for both color and depth
-  {
-    nvvk::CommandPool genCmdBuf(m_device, m_graphicsQueueIndex);
-    auto              cmdBuf = genCmdBuf.createCommandBuffer();
-    nvvk::cmdBarrierImageLayout(cmdBuf, m_offscreenColor.image, vk::ImageLayout::eUndefined,
-                                vk::ImageLayout::eGeneral);
-    nvvk::cmdBarrierImageLayout(cmdBuf, m_offscreenDepth.image, vk::ImageLayout::eUndefined,
-                                vk::ImageLayout::eDepthStencilAttachmentOptimal,
-                                vk::ImageAspectFlagBits::eDepth);
-
-    genCmdBuf.submitAndWait(cmdBuf);
-  }
-
-  // Creating a renderpass for the offscreen
-  if(!m_offscreenRenderPass)
-  {
-    m_offscreenRenderPass =
-        nvvk::createRenderPass(m_device, {m_offscreenColorFormat}, m_offscreenDepthFormat, 1, true,
-                               true, vk::ImageLayout::eGeneral, vk::ImageLayout::eGeneral);
-  }
-
-
-  // Creating the frame buffer for offscreen
-  std::vector<vk::ImageView> attachments = {m_offscreenColor.descriptor.imageView,
-                                            m_offscreenDepth.descriptor.imageView};
-
-  m_device.destroy(m_offscreenFramebuffer);
-  vk::FramebufferCreateInfo info;
-  info.setRenderPass(m_offscreenRenderPass);
-  info.setAttachmentCount(2);
-  info.setPAttachments(attachments.data());
-  info.setWidth(m_size.width);
-  info.setHeight(m_size.height);
-  info.setLayers(1);
-  m_offscreenFramebuffer = m_device.createFramebuffer(info);
-}
-
-//--------------------------------------------------------------------------------------------------
-// The pipeline is how things are rendered, which shaders, type of primitives, depth test and more
-//
-void HelloVulkan::createPostPipeline()
-{
-  // Push constants in the fragment shader
-  vk::PushConstantRange pushConstantRanges = {vk::ShaderStageFlagBits::eFragment, 0, sizeof(float)};
-
-  // Creating the pipeline layout
-  vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
-  pipelineLayoutCreateInfo.setSetLayoutCount(1);
-  pipelineLayoutCreateInfo.setPSetLayouts(&m_postDescSetLayout);
-  pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
-  pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstantRanges);
-  m_postPipelineLayout = m_device.createPipelineLayout(pipelineLayoutCreateInfo);
-
-  // Pipeline: completely generic, no vertices
-  std::vector<std::string> paths = defaultSearchPaths;
-
-  nvvk::GraphicsPipelineGeneratorCombined pipelineGenerator(m_device, m_postPipelineLayout,
-                                                            m_renderPass);
-  pipelineGenerator.addShader(nvh::loadFile("shaders/passthrough.vert.spv", true, paths),
-                              vk::ShaderStageFlagBits::eVertex);
-  pipelineGenerator.addShader(nvh::loadFile("shaders/post.frag.spv", true, paths),
-                              vk::ShaderStageFlagBits::eFragment);
-  pipelineGenerator.rasterizationState.setCullMode(vk::CullModeFlagBits::eNone);
-  m_postPipeline = pipelineGenerator.createPipeline();
-  m_debug.setObjectName(m_postPipeline, "post");
-}
-
-//--------------------------------------------------------------------------------------------------
-// The descriptor layout is the description of the data that is passed to the vertex or the
-// fragment program.
-//
-void HelloVulkan::createPostDescriptor()
-{
-  using vkDS = vk::DescriptorSetLayoutBinding;
-  using vkDT = vk::DescriptorType;
-  using vkSS = vk::ShaderStageFlagBits;
-
-  m_postDescSetLayoutBind.addBinding(vkDS(0, vkDT::eCombinedImageSampler, 1, vkSS::eFragment));
-  m_postDescSetLayout = m_postDescSetLayoutBind.createLayout(m_device);
-  m_postDescPool      = m_postDescSetLayoutBind.createPool(m_device);
-  m_postDescSet       = nvvk::allocateDescriptorSet(m_device, m_postDescPool, m_postDescSetLayout);
-}
-
-
-//--------------------------------------------------------------------------------------------------
-// Update the output
-//
-void HelloVulkan::updatePostDescriptorSet()
-{
-  vk::WriteDescriptorSet writeDescriptorSets =
-      m_postDescSetLayoutBind.makeWrite(m_postDescSet, 0, &m_offscreenColor.descriptor);
-  m_device.updateDescriptorSets(writeDescriptorSets, nullptr);
-}
-
-//--------------------------------------------------------------------------------------------------
-// Draw a full screen quad with the attached image
-//
-void HelloVulkan::drawPost(vk::CommandBuffer cmdBuf)
-{
-  m_debug.beginLabel(cmdBuf, "Post");
-
-  cmdBuf.setViewport(0, {vk::Viewport(0, 0, (float)m_size.width, (float)m_size.height, 0, 1)});
-  cmdBuf.setScissor(0, {{{0, 0}, {m_size.width, m_size.height}}});
-
-  auto aspectRatio = static_cast<float>(m_size.width) / static_cast<float>(m_size.height);
-  cmdBuf.pushConstants<float>(m_postPipelineLayout, vk::ShaderStageFlagBits::eFragment, 0,
-                              aspectRatio);
-  cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, m_postPipeline);
-  cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_postPipelineLayout, 0,
-                            m_postDescSet, {});
-  cmdBuf.draw(3, 1, 0, 0);
-
-  m_debug.endLabel(cmdBuf);
-}

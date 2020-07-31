@@ -66,6 +66,10 @@ public:
   void destroyResources();
   void rasterize(const vk::CommandBuffer& cmdBuff);
 
+  auto addShader(const std::string&      code,
+                                            vk::ShaderStageFlagBits stage,
+                                            const char*             entryPoint = "main");
+
   // The OBJ model
   struct ObjModel
   {
@@ -122,25 +126,7 @@ public:
   nvvk::DebugUtil          m_debug;  // Utility to name objects
 
 
-  // #Post
-  void createOffscreenRender();
-  void createPostPipeline();
-  void createPostDescriptor();
-  void updatePostDescriptorSet();
-  void drawPost(vk::CommandBuffer cmdBuf);
 
-  nvvk::DescriptorSetBindings m_postDescSetLayoutBind;
-  vk::DescriptorPool          m_postDescPool;
-  vk::DescriptorSetLayout     m_postDescSetLayout;
-  vk::DescriptorSet           m_postDescSet;
-  vk::Pipeline                m_postPipeline;
-  vk::PipelineLayout          m_postPipelineLayout;
-  vk::RenderPass              m_offscreenRenderPass;
-  vk::Framebuffer             m_offscreenFramebuffer;
-  nvvk::Texture                 m_offscreenColor;
-  vk::Format                  m_offscreenColorFormat{vk::Format::eR32G32B32A32Sfloat};
-  nvvk::Texture                 m_offscreenDepth;
-  vk::Format                  m_offscreenDepthFormat{vk::Format::eD32Sfloat};
 
   // find memory type with desired properties.
   //this is the same as getMemoryType *shrug*
