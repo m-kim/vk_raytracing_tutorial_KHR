@@ -54,7 +54,7 @@ public:
              const vk::PhysicalDevice& physicalDevice,
              uint32_t                  queueFamily) override;
   void createDescriptorSetLayout();
-  void createGraphicsPipeline();
+
   void loadModel(const std::string& filename, nvmath::mat4f transform = nvmath::mat4f(1));
   void updateDescriptorSet();
   void createUniformBuffer();
@@ -65,6 +65,7 @@ public:
   void onResize(int /*w*/, int /*h*/) override;
   void destroyResources();
   void rasterize(const vk::CommandBuffer& cmdBuff);
+
 
   // The OBJ model
   struct ObjModel
@@ -116,25 +117,6 @@ public:
   nvvk::AllocatorDedicated m_alloc;  // Allocator for buffer, images, acceleration structures
   nvvk::DebugUtil          m_debug;  // Utility to name objects
 
-  // #Post
-  void createOffscreenRender();
-  void createPostPipeline();
-  void createPostDescriptor();
-  void updatePostDescriptorSet();
-  void drawPost(vk::CommandBuffer cmdBuf);
-
-  nvvk::DescriptorSetBindings m_postDescSetLayoutBind;
-  vk::DescriptorPool          m_postDescPool;
-  vk::DescriptorSetLayout     m_postDescSetLayout;
-  vk::DescriptorSet           m_postDescSet;
-  vk::Pipeline                m_postPipeline;
-  vk::PipelineLayout          m_postPipelineLayout;
-  vk::RenderPass              m_offscreenRenderPass;
-  vk::Framebuffer             m_offscreenFramebuffer;
-  nvvk::Texture               m_offscreenColor;
-  vk::Format                  m_offscreenColorFormat{vk::Format::eR32G32B32A32Sfloat};
-  nvvk::Texture               m_offscreenDepth;
-  vk::Format                  m_offscreenDepthFormat{vk::Format::eD32Sfloat};
 
   // #VKRay
   void                             initRayTracing();
@@ -149,8 +131,8 @@ public:
   {
     float r, g, b, a;
   };
-  int WIDTH = 3200;
-  int HEIGHT = 2400;
+  int WIDTH = 1280;
+  int HEIGHT = 720;
 
 
 
@@ -304,45 +286,6 @@ public:
 
   void createDescriptorSet()
   {
-    VkDescriptorPool descriptorPool = m_descPool;
-    VkDescriptorSetLayout descriptorSetLayout = m_descSetLayout;
-    VkDescriptorSet       descriptorSet       = m_descSet;
-
-    /*
-        So we will allocate a descriptor set here.
-        But we need to first create a descriptor pool to do that. 
-        */
-
-    /*
-        Our descriptor pool can only allocate a single storage buffer.
-        */
-    VkDescriptorPoolSize descriptorPoolSize = {};
-    descriptorPoolSize.type                 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptorPoolSize.descriptorCount      = 1;
-
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
-    descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptorPoolCreateInfo.maxSets =
-        1;  // we only need to allocate one descriptor set from the pool.
-    descriptorPoolCreateInfo.poolSizeCount = 1;
-    descriptorPoolCreateInfo.pPoolSizes    = &descriptorPoolSize;
-
-    // create descriptor pool.
-    NVVK_CHECK(
-        vkCreateDescriptorPool(m_device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
-
-    /*
-        With the pool allocated, we can now allocate the descriptor set. 
-        */
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
-    descriptorSetAllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptorSetAllocateInfo.descriptorPool     = descriptorPool;  // pool to allocate from.
-    descriptorSetAllocateInfo.descriptorSetCount = 1;  // allocate a single descriptor set.
-    descriptorSetAllocateInfo.pSetLayouts        = &descriptorSetLayout;
-
-    // allocate descriptor set.
-    NVVK_CHECK(vkAllocateDescriptorSets(m_device, &descriptorSetAllocateInfo, &descriptorSet));
-
     /*
         Next, we need to connect our actual storage buffer with the descrptor. 
         We use vkUpdateDescriptorSets() to update the descriptor set.
@@ -356,7 +299,7 @@ public:
 
     VkWriteDescriptorSet writeDescriptorSet = {};
     writeDescriptorSet.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writeDescriptorSet.dstSet               = descriptorSet;  // write to this descriptor set.
+    writeDescriptorSet.dstSet               = m_descSet;  // write to this descriptor set.
     writeDescriptorSet.dstBinding           = 0;  // write to the first, and only binding.
     writeDescriptorSet.descriptorCount      = 1;  // update a single descriptor.
     writeDescriptorSet.descriptorType       = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;  // storage buffer.
@@ -365,9 +308,6 @@ public:
     // perform the update of the descriptor set.
     vkUpdateDescriptorSets(m_device, 1, &writeDescriptorSet, 0, NULL);
 
-    m_descPool  = descriptorPool;
-    m_descSetLayout = descriptorSetLayout;
-    m_descSet       = descriptorSet;
   }
 
   // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -414,18 +354,6 @@ public:
     VkCommandPool    commandPool    = m_cmdPool;
     VkCommandBuffer  commandBuffer;
 
-    /*
-        We are getting closer to the end. In order to send commands to the device(GPU),
-        we must first record commands into a command buffer.
-        To allocate a command buffer, we must first create a command pool. So let us do that.
-        */
-    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-    commandPoolCreateInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    commandPoolCreateInfo.flags                   = 0;
-    // the queue family of this command pool. All command buffers allocated from this command pool,
-    // must be submitted to queues of this family ONLY.
-    commandPoolCreateInfo.queueFamilyIndex = _queueFamilyIndex;
-    NVVK_CHECK(vkCreateCommandPool(m_device, &commandPoolCreateInfo, NULL, &commandPool));
 
     /*
         Now allocate a command buffer from the command pool. 
