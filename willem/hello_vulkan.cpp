@@ -556,9 +556,260 @@ void HelloVulkan::rasterize(const vk::CommandBuffer& cmdBuf)
 void HelloVulkan::onResize(int /*w*/, int /*h*/)
 {
 }
+void HelloVulkan::createSurface(const vk::SurfaceKHR& surface,
+                           uint32_t              width,
+                           uint32_t              height,
+                           vk::Format            colorFormat,
+                           vk::Format            depthFormat,
+                           bool                  vsync)
+{
+  m_size        = vk::Extent2D(width, height);
+  m_depthFormat = depthFormat;
+  m_colorFormat = colorFormat;
+  m_vsync       = vsync;
+
+  m_swapChain.init(m_device, m_physicalDevice, m_queue, m_graphicsQueueIndex, surface,
+                   static_cast<VkFormat>(colorFormat));
+  updateSwapchain(m_size.width, m_size.height, vsync);
+  m_colorFormat = static_cast<vk::Format>(m_swapChain.getFormat());
+
+  // Create Synchronization Primitives
+  m_waitFences.resize(m_swapChain.getImageCount());
+  for(auto& fence : m_waitFences)
+  {
+    fence = m_device.createFence({vk::FenceCreateFlagBits::eSignaled});
+  }
+
+  // Command buffers store a reference to the frame buffer inside their render pass info
+  // so for static usage without having to rebuild them each frame, we use one per frame buffer
+  m_commandBuffers = m_device.allocateCommandBuffers(
+      {m_cmdPool, vk::CommandBufferLevel::ePrimary, m_swapChain.getImageCount()});
+
+#ifdef _DEBUG
+  for(size_t i = 0; i < m_commandBuffers.size(); i++)
+  {
+    std::string name = std::string("AppBase") + std::to_string(i);
+    m_device.setDebugUtilsObjectNameEXT({vk::ObjectType::eCommandBuffer,
+                                         reinterpret_cast<const uint64_t&>(m_commandBuffers[i]),
+                                         name.c_str()});
+  }
+#endif  // _DEBUG
+
+  // Setup camera
+  CameraManip.setWindowSize(m_size.width, m_size.height);
+}
 
 
-void HelloVulkan::saveRenderedImage() {
+VkExtent2D HelloVulkan::updateSwapchain(int width, int height, bool vsync) {
+  m_swapChain.m_changeID++;
+
+  VkResult       err;
+  VkSwapchainKHR oldSwapchain = m_swapChain.getSwapchain();//m_swapchain;
+
+  err = vkDeviceWaitIdle(m_device);
+  if(nvvk::checkResult(err, __FILE__, __LINE__))
+  {
+    exit(-1);
+  }
+  // Check the surface capabilities and formats
+  VkSurfaceCapabilitiesKHR surfCapabilities;
+  err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfCapabilities);
+  assert(!err);
+
+  uint32_t presentModeCount;
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModeCount,
+                                                  nullptr);
+  assert(!err);
+  std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &presentModeCount,
+                                                  presentModes.data());
+  assert(!err);
+
+  VkExtent2D swapchainExtent;
+  // width and height are either both -1, or both not -1.
+  if(surfCapabilities.currentExtent.width == (uint32_t)-1)
+  {
+    // If the surface size is undefined, the size is set to
+    // the size of the images requested.
+    swapchainExtent.width  = width;
+    swapchainExtent.height = height;
+  }
+  else
+  {
+    // If the surface size is defined, the swap chain size must match
+    swapchainExtent = surfCapabilities.currentExtent;
+  }
+
+  // test against valid size, typically hit when windows are minimized, the app must
+  // prevent triggering this code accordingly
+  assert(swapchainExtent.width && swapchainExtent.height);
+
+  // everyone must support FIFO mode
+  VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+  // no vsync try to find a faster alternative to FIFO
+  if(!vsync)
+  {
+    for(uint32_t i = 0; i < presentModeCount; i++)
+    {
+      if(presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+      {
+        // prefer mailbox due to no tearing
+        swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        break;
+      }
+      if(presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)
+      {
+        swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+      }
+    }
+  }
+
+  // Determine the number of VkImage's to use in the swap chain (we desire to
+  // own only 1 image at a time, besides the images being displayed and
+  // queued for display):
+  uint32_t desiredNumberOfSwapchainImages = surfCapabilities.minImageCount + 1;
+  if((surfCapabilities.maxImageCount > 0)
+     && (desiredNumberOfSwapchainImages > surfCapabilities.maxImageCount))
+  {
+    // Application must settle for fewer images than desired:
+    desiredNumberOfSwapchainImages = surfCapabilities.maxImageCount;
+  }
+
+  VkSurfaceTransformFlagBitsKHR preTransform;
+  if(surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+  {
+    preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  }
+  else
+  {
+    preTransform = surfCapabilities.currentTransform;
+  }
+
+  VkSwapchainCreateInfoKHR swapchain = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+  swapchain.surface                  = m_swapChain.m_surface;
+  swapchain.minImageCount            = desiredNumberOfSwapchainImages;
+  swapchain.imageFormat              = m_swapChain.m_surfaceFormat;
+  swapchain.imageColorSpace          = m_swapChain.m_surfaceColor;
+  swapchain.imageExtent              = swapchainExtent;
+
+  //This is why this is recreated here from swapchain_vk
+  //VK_IMAGE_USAGE_TRANSFER_SRC_BIT is not included in swapchain_VK
+  //but it's needed if we want to map to cpu memory.
+  swapchain.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+                         | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  swapchain.preTransform          = preTransform;
+  swapchain.compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  swapchain.imageArrayLayers      = 1;
+  swapchain.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+  swapchain.queueFamilyIndexCount = 1;
+  swapchain.pQueueFamilyIndices   = &m_swapChain.m_queueFamilyIndex;
+  swapchain.presentMode           = swapchainPresentMode;
+  swapchain.oldSwapchain          = oldSwapchain;
+  swapchain.clipped               = true;
+
+  err = vkCreateSwapchainKHR(m_device, &swapchain, nullptr, &m_swapChain.m_swapchain);
+  assert(!err);
+
+  nvvk::DebugUtil debugUtil(m_device);
+
+  debugUtil.setObjectName(m_swapChain.m_swapchain, "SwapChain::m_swapchain");
+
+  // If we just re-created an existing swapchain, we should destroy the old
+  // swapchain at this point.
+  // Note: destroying the swapchain also cleans up all its associated
+  // presentable images once the platform is done with them.
+  if(oldSwapchain != VK_NULL_HANDLE)
+  {
+    for(auto it : m_swapChain.m_entries)
+    {
+      vkDestroyImageView(m_device, it.imageView, nullptr);
+      vkDestroySemaphore(m_device, it.readSemaphore, nullptr);
+      vkDestroySemaphore(m_device, it.writtenSemaphore, nullptr);
+    }
+    vkDestroySwapchainKHR(m_device, oldSwapchain, nullptr);
+  }
+
+  err =
+      vkGetSwapchainImagesKHR(m_device, m_swapChain.m_swapchain, &m_swapChain.m_imageCount, nullptr);
+  assert(!err);
+
+  m_swapChain.m_entries.resize(m_swapChain.m_imageCount);
+  m_swapChain.m_barriers.resize(m_swapChain.m_imageCount);
+
+  std::vector<VkImage> images(m_swapChain.m_imageCount);
+
+  err = vkGetSwapchainImagesKHR(m_device, m_swapChain.m_swapchain, &m_swapChain.m_imageCount,
+                                images.data());
+  assert(!err);
+  //
+  // Image views
+  //
+  for(uint32_t i = 0; i < m_swapChain.m_imageCount; i++)
+  {
+    nvvk::SwapChain::Entry & entry = m_swapChain.m_entries[i];
+
+    // image
+    entry.image = images[i];
+
+    // imageview
+    VkImageViewCreateInfo viewCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                                            NULL,
+                                            0,
+                                            entry.image,
+                                            VK_IMAGE_VIEW_TYPE_2D,
+                                            m_swapChain.m_surfaceFormat,
+                                            {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+                                             VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+                                            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+
+    err = vkCreateImageView(m_device, &viewCreateInfo, nullptr, &entry.imageView);
+    assert(!err);
+
+    // semaphore
+    VkSemaphoreCreateInfo semCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+
+    err = vkCreateSemaphore(m_device, &semCreateInfo, nullptr, &entry.readSemaphore);
+    assert(!err);
+    err = vkCreateSemaphore(m_device, &semCreateInfo, nullptr, &entry.writtenSemaphore);
+    assert(!err);
+
+    // initial barriers
+    VkImageSubresourceRange range = {0};
+    range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
+    range.baseMipLevel            = 0;
+    range.levelCount              = VK_REMAINING_MIP_LEVELS;
+    range.baseArrayLayer          = 0;
+    range.layerCount              = VK_REMAINING_ARRAY_LAYERS;
+
+    VkImageMemoryBarrier memBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    memBarrier.sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    memBarrier.dstAccessMask        = 0;
+    memBarrier.srcAccessMask        = 0;
+    memBarrier.oldLayout            = VK_IMAGE_LAYOUT_UNDEFINED;
+    memBarrier.newLayout            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    memBarrier.image                = entry.image;
+    memBarrier.subresourceRange     = range;
+
+    m_swapChain.m_barriers[i] = memBarrier;
+
+    debugUtil.setObjectName(entry.image, "swapchainImage:" + std::to_string(i));
+    debugUtil.setObjectName(entry.imageView, "swapchainImageView:" + std::to_string(i));
+    debugUtil.setObjectName(entry.readSemaphore, "swapchainReadSemaphore:" + std::to_string(i));
+    debugUtil.setObjectName(entry.writtenSemaphore,
+                            "swapchainWrittenSemaphore:" + std::to_string(i));
+  }
+  m_swapChain.m_updateWidth  = width;
+  m_swapChain.m_updateHeight = height;
+  m_swapChain.m_vsync        = vsync;
+  m_swapChain.m_extent       = swapchainExtent;
+
+  m_swapChain.m_currentSemaphore = 0;
+  m_swapChain.m_currentImage     = 0;
+
+  return swapchainExtent;
+
+  }
+  void HelloVulkan::saveRenderedImage() {
   auto data = readPixels();
   lodepng::encode("output.png", (unsigned char *)data.data(), m_size.width, m_size.height);
 

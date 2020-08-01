@@ -65,8 +65,19 @@ public:
   void rasterize(const vk::CommandBuffer& cmdBuff);
 
   auto addShader(const std::string&      code,
-                                            vk::ShaderStageFlagBits stage,
-                                            const char*             entryPoint = "main");
+                 vk::ShaderStageFlagBits stage,
+                 const char*             entryPoint = "main");
+  void createSurface(const vk::SurfaceKHR& surface,
+                     uint32_t              width,
+                     uint32_t              height,
+                     vk::Format            colorFormat = vk::Format::eB8G8R8A8Unorm,
+                     vk::Format            depthFormat = vk::Format::eD32SfloatS8Uint,
+                     bool                  vsync       = false) override;
+
+  //this is copied from swapchain_vk.cpp
+  //because to copy from the framebuffer I need to setup the swapchain differently
+  VkExtent2D updateSwapchain(int width, int height, bool vsync);
+
   void saveRenderedImage();
   // The OBJ model
   struct ObjModel
