@@ -55,6 +55,8 @@ public:
              uint32_t                  queueFamily) override;
   void createDescriptorSetLayout();
 
+  void createRtDescriptorSet();
+
   void loadModel(const std::string& filename, nvmath::mat4f transform = nvmath::mat4f(1));
   void updateDescriptorSet();
   void createUniformBuffer();
@@ -66,6 +68,10 @@ public:
   void destroyResources();
   void rasterize(const vk::CommandBuffer& cmdBuff);
 
+  nvvk::DescriptorSetBindings m_rtDescSetLayoutBind;
+  vk::DescriptorPool          m_rtDescPool;
+  vk::DescriptorSetLayout     m_rtDescSetLayout;
+  vk::DescriptorSet           m_rtDescSet;
 
   // The OBJ model
   struct ObjModel

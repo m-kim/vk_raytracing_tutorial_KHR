@@ -173,9 +173,18 @@ int main(int argc, char** argv)
   //helloVk.m_bufferSize = SAMPLE_WIDTH * SAMPLE_HEIGHT * 4 * 4;
   helloVk.createComputeBuffer();
   helloVk.createUniformBuffer();
+
+    // Creation of the example
+  helloVk.loadModel(nvh::findFile("media/scenes/cube_multi.obj", defaultSearchPaths));
   helloVk.createDescriptorSetLayout();
-  helloVk.updateDescriptorSet();
+
+  //raytracing
+  helloVk.initRayTracing();
+  helloVk.createBottomLevelAS();
+  helloVk.createTopLevelAS();
   
+  helloVk.updateDescriptorSet();
+
   helloVk.createComputePipeline();
   helloVk.createCommandBuffer(vkctx.m_queueGCT.familyIndex);
 
