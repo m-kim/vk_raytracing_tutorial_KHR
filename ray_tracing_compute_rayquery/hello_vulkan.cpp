@@ -569,10 +569,10 @@ void HelloVulkan::destroyResources()
     m_alloc.destroy(m.matIndexBuffer);
   }
 
-  //for(auto& t : m_textures)
-  //{
-  //  m_alloc.destroy(t);
-  //}
+  for(auto& t : m_textures)
+  {
+    m_alloc.destroy(t);
+  }
 
   ////#Post
   //m_device.destroy(m_postPipeline);
