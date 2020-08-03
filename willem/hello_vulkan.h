@@ -67,6 +67,8 @@ public:
   auto addShader(const std::string&      code,
                  vk::ShaderStageFlagBits stage,
                  const char*             entryPoint = "main");
+  auto addVertexShader(vk::ShaderStageFlagBits stage, const char* entryPoint = "main");
+  auto addFragmentShader(vk::ShaderStageFlagBits stage, const char* entryPoint = "main");
   void createSurface(const vk::SurfaceKHR& surface,
                      uint32_t              width,
                      uint32_t              height,

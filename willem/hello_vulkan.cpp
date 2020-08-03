@@ -44,7 +44,28 @@ extern std::vector<std::string> defaultSearchPaths;
 #include "nvvk/renderpasses_vk.hpp"
 
 #include <lodepng.h>
+//#define EMBED_SHADERS
 
+namespace {
+#ifdef EMBED_SHADERS 
+  //cat vert_shader.vert.spv | xxd -i > vert_shader.vert.array
+    uint8_t s_vertexShader[] = {
+       
+      #include "shaders/vert_shader.vert.array"
+    };
+#else
+uint8_t s_vertexShader[] = {0};
+#endif
+
+#ifdef EMBED_SHADERS
+    //cat frag_shader.frag.spv | xxd - i > frag_shader.frag.array
+    uint8_t s_pixelShader[] = {
+        #include "shaders/frag_shader.frag.array"
+    };
+#else
+uint8_t s_pixelShader[]  = {0};
+#endif
+}
 // Holding the camera matrices
 struct CameraMatrices
 {
@@ -143,6 +164,39 @@ auto HelloVulkan::addShader(const std::string&      code,
   return std::make_tuple(shaderStage, shaderModule);
 }
 
+auto HelloVulkan::addVertexShader(vk::ShaderStageFlagBits stage, const char* entryPoint)
+{
+
+  VkShaderModuleCreateInfo createInfo{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+  createInfo.codeSize = sizeof(s_vertexShader);
+  createInfo.pCode    = reinterpret_cast<const uint32_t*>(s_vertexShader);
+  VkShaderModule shaderModule;
+  vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule);
+  //temporaryModules.push_back(shaderModule);
+  VkPipelineShaderStageCreateInfo shaderStage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+  shaderStage.stage  = (VkShaderStageFlagBits)stage;
+  shaderStage.module = shaderModule;
+  shaderStage.pName  = entryPoint;
+
+  return std::make_tuple(shaderStage, shaderModule);
+}
+
+auto HelloVulkan::addFragmentShader(vk::ShaderStageFlagBits stage, const char* entryPoint)
+{
+
+  VkShaderModuleCreateInfo createInfo{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+  createInfo.codeSize = sizeof(s_pixelShader);
+  createInfo.pCode    = reinterpret_cast<const uint32_t*>(s_pixelShader);
+  VkShaderModule shaderModule;
+  vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule);
+  //temporaryModules.push_back(shaderModule);
+  VkPipelineShaderStageCreateInfo shaderStage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+  shaderStage.stage  = (VkShaderStageFlagBits)stage;
+  shaderStage.module = shaderModule;
+  shaderStage.pName  = entryPoint;
+
+  return std::make_tuple(shaderStage, shaderModule);
+}
 //--------------------------------------------------------------------------------------------------
 // Creating the pipeline layout
 //
@@ -274,11 +328,22 @@ void HelloVulkan::createGraphicsPipeline()
   std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 
   std::vector<std::string>    paths = defaultSearchPaths;
-  auto vertShad= addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
+#ifdef EMBED_SHADERS
+  auto vertShad= addVertexShader(vkSS::eVertex);
+#else
+  auto vertShad =
+      addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
+#endif
   shaderStages.push_back(std::get<0>(vertShad));
   shaderModules.push_back(std::get<1>(vertShad));
+#ifdef EMBED_SHADERS
+  auto fragShad =
+      addFragmentShader(vkSS::eFragment);
+#else
   auto fragShad =
       addShader(nvh::loadFile("shaders/frag_shader.frag.spv", true, paths), vkSS::eFragment);
+#endif
+
   shaderStages.push_back(std::get<0>(fragShad));
   shaderModules.push_back(std::get<1>(fragShad));
 

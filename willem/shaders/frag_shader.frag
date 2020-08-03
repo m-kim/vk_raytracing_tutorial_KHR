@@ -29,5 +29,5 @@ layout(location = 0) out vec4 outColor;
 void main()
 {
   // Result
-  outColor = vec4(fragColor, 1.0);//vec4(lightIntensity * (diffuse + specular), 1);
+  outColor = vec4(0,0,0, 1.0);//vec4(lightIntensity * (diffuse + specular), 1);
 }
