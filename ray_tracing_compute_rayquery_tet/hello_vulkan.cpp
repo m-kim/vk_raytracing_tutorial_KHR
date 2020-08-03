@@ -385,7 +385,7 @@ void HelloVulkan::loadModel(const std::string& filename, nvmath::mat4f transform
   //std::vector<uint32_t> indices{0, 1, 3};
   //std::vector<uint32_t> indices{1, 2, 3};
   //std::vector<uint32_t> indices{0, 3, 2};
-  std::vector<uint32_t> indices{0, 1, 2, 0, 1, 3, 1, 2, 3, 0, 3, 2};
+  std::vector<uint32_t> indices{2, 1, 0, 0, 1, 3, 1, 2, 3, 0, 3, 2};
   uint32_t              indicesSize = indices.size() * sizeof(uint32_t);
 
   std::vector<MaterialObj> materials(12);
