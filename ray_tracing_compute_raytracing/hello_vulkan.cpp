@@ -187,40 +187,7 @@ void HelloVulkan::updateDescriptorSet()
   m_device.updateDescriptorSets(static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
 
-//--------------------------------------------------------------------------------------------------
-// Creating the pipeline layout
-//
-void HelloVulkan::createGraphicsPipeline()
-{
-  using vkSS = vk::ShaderStageFlagBits;
 
-  vk::PushConstantRange pushConstantRanges = {vkSS::eVertex | vkSS::eFragment, 0,
-                                              sizeof(ObjPushConstant)};
-
-  // Creating the Pipeline Layout
-  vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
-  vk::DescriptorSetLayout      descSetLayout(m_descSetLayout);
-  pipelineLayoutCreateInfo.setSetLayoutCount(1);
-  pipelineLayoutCreateInfo.setPSetLayouts(&descSetLayout);
-  pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
-  pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstantRanges);
-  m_pipelineLayout = m_device.createPipelineLayout(pipelineLayoutCreateInfo);
-
-  // Creating the Pipeline
-  std::vector<std::string>                paths = defaultSearchPaths;
-  nvvk::GraphicsPipelineGeneratorCombined gpb(m_device, m_pipelineLayout, m_renderPass);
-  gpb.depthStencilState.depthTestEnable = true;
-  gpb.addShader(nvh::loadFile("shaders/vert_shader.vert.spv", true, paths), vkSS::eVertex);
-  gpb.addShader(nvh::loadFile("shaders/frag_shader.frag.spv", true, paths), vkSS::eFragment);
-  gpb.addBindingDescription({0, sizeof(VertexObj)});
-  gpb.addAttributeDescriptions({{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, pos)},
-                                {1, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, nrm)},
-                                {2, 0, vk::Format::eR32G32B32Sfloat, offsetof(VertexObj, color)},
-                                {3, 0, vk::Format::eR32G32Sfloat, offsetof(VertexObj, texCoord)}});
-
-  m_graphicsPipeline = gpb.createPipeline();
-  m_debug.setObjectName(m_graphicsPipeline, "Graphics");
-}
 
 void HelloVulkan::createComputePipeline()
 {

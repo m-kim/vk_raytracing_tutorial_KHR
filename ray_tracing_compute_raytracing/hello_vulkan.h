@@ -54,7 +54,6 @@ public:
              const vk::PhysicalDevice& physicalDevice,
              uint32_t                  queueFamily) override;
   void createDescriptorSetLayout();
-  void createGraphicsPipeline();
   void loadModel(const std::string& filename, nvmath::mat4f transform = nvmath::mat4f(1));
   void updateDescriptorSet();
   void createUniformBuffer();
