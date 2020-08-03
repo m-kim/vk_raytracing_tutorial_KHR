@@ -181,6 +181,9 @@ int main(int argc, char** argv)
 
   helloVk.runCommandBuffer();
   helloVk.saveRenderedImage();
+
+
+
   //helloVk.createDepthBuffer();
   //helloVk.createRenderPass();
   //helloVk.createFrameBuffers();
@@ -194,13 +197,8 @@ int main(int argc, char** argv)
 
   //helloVk.createOffscreenRender();
   //helloVk.createDescriptorSetLayout();
-  //helloVk.createGraphicsPipeline();
   //helloVk.createSceneDescriptionBuffer();
 
-  //// #VKRay
-  //helloVk.initRayTracing();
-  //helloVk.createBottomLevelAS();
-  //helloVk.createTopLevelAS();
 
   //// Need the Top level AS
   //helloVk.updateDescriptorSet();

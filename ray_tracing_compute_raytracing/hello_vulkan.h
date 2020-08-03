@@ -117,34 +117,6 @@ public:
   nvvk::AllocatorDedicated m_alloc;  // Allocator for buffer, images, acceleration structures
   nvvk::DebugUtil          m_debug;  // Utility to name objects
 
-  // #Post
-  void createOffscreenRender();
-  void createPostPipeline();
-  void createPostDescriptor();
-  void updatePostDescriptorSet();
-  void drawPost(vk::CommandBuffer cmdBuf);
-
-  nvvk::DescriptorSetBindings m_postDescSetLayoutBind;
-  vk::DescriptorPool          m_postDescPool;
-  vk::DescriptorSetLayout     m_postDescSetLayout;
-  vk::DescriptorSet           m_postDescSet;
-  vk::Pipeline                m_postPipeline;
-  vk::PipelineLayout          m_postPipelineLayout;
-  vk::RenderPass              m_offscreenRenderPass;
-  vk::Framebuffer             m_offscreenFramebuffer;
-  nvvk::Texture               m_offscreenColor;
-  vk::Format                  m_offscreenColorFormat{vk::Format::eR32G32B32A32Sfloat};
-  nvvk::Texture               m_offscreenDepth;
-  vk::Format                  m_offscreenDepthFormat{vk::Format::eD32Sfloat};
-
-  // #VKRay
-  void                             initRayTracing();
-  nvvk::RaytracingBuilderKHR::Blas objectToVkGeometryKHR(const ObjModel& model);
-  void                             createBottomLevelAS();
-  void                             createTopLevelAS();
-
-  vk::PhysicalDeviceRayTracingPropertiesKHR m_rtProperties;
-  nvvk::RaytracingBuilderKHR                m_rtBuilder;
 
   struct Pixel
   {
@@ -414,19 +386,6 @@ public:
     VkPipelineLayout pipelineLayout = m_pipelineLayout;
     VkCommandPool    commandPool    = m_cmdPool;
     VkCommandBuffer  commandBuffer;
-
-    /*
-        We are getting closer to the end. In order to send commands to the device(GPU),
-        we must first record commands into a command buffer.
-        To allocate a command buffer, we must first create a command pool. So let us do that.
-        */
-    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-    commandPoolCreateInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    commandPoolCreateInfo.flags                   = 0;
-    // the queue family of this command pool. All command buffers allocated from this command pool,
-    // must be submitted to queues of this family ONLY.
-    commandPoolCreateInfo.queueFamilyIndex = _queueFamilyIndex;
-    NVVK_CHECK(vkCreateCommandPool(m_device, &commandPoolCreateInfo, NULL, &commandPool));
 
     /*
         Now allocate a command buffer from the command pool. 
