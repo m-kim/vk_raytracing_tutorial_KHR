@@ -178,7 +178,7 @@ public:
     vkUnmapMemory(m_device, bufferMemory);
 
     // Now we save the acquired color data to a .png.
-    unsigned error = lodepng::encode("mandelbrot.png", image, WIDTH, HEIGHT);
+    unsigned error = lodepng::encode("rayquery-triangle.png", image, WIDTH, HEIGHT);
     if(error)
       printf("encoder error %d: %s", error, lodepng_error_text(error));
   }
