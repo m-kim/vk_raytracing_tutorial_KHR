@@ -97,23 +97,7 @@ int main(int argc, char** argv)
   {
     return 1;
   }
-  //glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  //GLFWwindow* window = glfwCreateWindow(SAMPLE_WIDTH, SAMPLE_HEIGHT,
-  //                                      "NVIDIA Vulkan Raytracing Tutorial", nullptr, nullptr);
 
-  //// Setup camera
-  //CameraManip.setWindowSize(SAMPLE_WIDTH, SAMPLE_HEIGHT);
-  //CameraManip.setLookat(nvmath::vec3f(5, 4, -4), nvmath::vec3f(0, 1, 0), nvmath::vec3f(0, 1, 0));
-
-  //// Setup Vulkan
-  //if(!glfwVulkanSupported())
-  //{
-  //  printf("GLFW: Vulkan Not Supported\n");
-  //  return 1;
-  //}
-
-  //// setup some basic things for the sample, logging file for example
-  //NVPSystem system(argv[0], PROJECT_NAME);
 
   // Search path for shaders and other media
   defaultSearchPaths = {
@@ -168,14 +152,12 @@ int main(int argc, char** argv)
 
   helloVk.setup(vkctx.m_instance, vkctx.m_device, vkctx.m_physicalDevice,
                 vkctx.m_queueGCT.familyIndex);
-  //helloVk.createSurface(surface, SAMPLE_WIDTH, SAMPLE_HEIGHT);
 
-  //helloVk.m_bufferSize = SAMPLE_WIDTH * SAMPLE_HEIGHT * 4 * 4;
   helloVk.createComputeBuffer();
   helloVk.createUniformBuffer();
   helloVk.createDescriptorSetLayout();
   helloVk.updateDescriptorSet();
-  
+
   helloVk.createComputePipeline();
   helloVk.createCommandBuffer(vkctx.m_queueGCT.familyIndex);
 
@@ -183,127 +165,8 @@ int main(int argc, char** argv)
   helloVk.saveRenderedImage();
 
 
-
-  //helloVk.createDepthBuffer();
-  //helloVk.createRenderPass();
-  //helloVk.createFrameBuffers();
-
-  //// Setup Imgui
-  //helloVk.initGUI(0);  // Using sub-pass 0
-
-  //// Creation of the example
-  //helloVk.loadModel(nvh::findFile("media/scenes/plane.obj", defaultSearchPaths));
-  //helloVk.loadModel(nvh::findFile("media/scenes/Medieval_building.obj", defaultSearchPaths));
-
-  //helloVk.createOffscreenRender();
-  //helloVk.createDescriptorSetLayout();
-  //helloVk.createSceneDescriptionBuffer();
-
-
-  //// Need the Top level AS
-  //helloVk.updateDescriptorSet();
-
-  //helloVk.createPostDescriptor();
-  //helloVk.createPostPipeline();
-  //helloVk.updatePostDescriptorSet();
-
   nvmath::vec4f clearColor = nvmath::vec4f(1, 1, 1, 1.00f);
 
-//  helloVk.setupGlfwCallbacks(window);
-//  ImGui_ImplGlfw_InitForVulkan(window, true);
-//
-//  // Main loop
-//  while(!glfwWindowShouldClose(window))
-//  {
-//    try
-//    {
-//      glfwPollEvents();
-//      if(helloVk.isMinimized())
-//        continue;
-//
-//      // Start the Dear ImGui frame
-//      ImGui_ImplGlfw_NewFrame();
-//      ImGui::NewFrame();
-//
-//      // Updating camera buffer
-//      helloVk.updateUniformBuffer();
-//
-//      // Show UI window.
-//      if(1 == 1)
-//      {
-//        ImGui::ColorEdit3("Clear color", reinterpret_cast<float*>(&clearColor));
-//
-//        renderUI(helloVk);
-//        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-//                    1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-//        ImGui::Render();
-//      }
-//
-//      // Start rendering the scene
-//      helloVk.prepareFrame();
-//
-//      // Start command buffer of this frame
-//      auto                     curFrame = helloVk.getCurFrame();
-//      const vk::CommandBuffer& cmdBuff  = helloVk.getCommandBuffers()[curFrame];
-//
-//      cmdBuff.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-//
-//      // Clearing screen
-//      vk::ClearValue clearValues[2];
-//      clearValues[0].setColor(
-//          std::array<float, 4>({clearColor[0], clearColor[1], clearColor[2], clearColor[3]}));
-//      clearValues[1].setDepthStencil({1.0f, 0});
-//
-//      // Offscreen render pass
-//      {
-//        vk::RenderPassBeginInfo offscreenRenderPassBeginInfo;
-//        offscreenRenderPassBeginInfo.setClearValueCount(2);
-//        offscreenRenderPassBeginInfo.setPClearValues(clearValues);
-//        offscreenRenderPassBeginInfo.setRenderPass(helloVk.m_offscreenRenderPass);
-//        offscreenRenderPassBeginInfo.setFramebuffer(helloVk.m_offscreenFramebuffer);
-//        offscreenRenderPassBeginInfo.setRenderArea({{}, helloVk.getSize()});
-//
-//        // Rendering Scene
-//        {
-//          cmdBuff.beginRenderPass(offscreenRenderPassBeginInfo, vk::SubpassContents::eInline);
-//          helloVk.rasterize(cmdBuff);
-//          cmdBuff.endRenderPass();
-//        }
-//      }
-//
-//      // 2nd rendering pass: tone mapper, UI
-//      {
-//        vk::RenderPassBeginInfo postRenderPassBeginInfo;
-//        postRenderPassBeginInfo.setClearValueCount(2);
-//        postRenderPassBeginInfo.setPClearValues(clearValues);
-//        postRenderPassBeginInfo.setRenderPass(helloVk.getRenderPass());
-//        postRenderPassBeginInfo.setFramebuffer(helloVk.getFramebuffers()[curFrame]);
-//        postRenderPassBeginInfo.setRenderArea({{}, helloVk.getSize()});
-//
-//        cmdBuff.beginRenderPass(postRenderPassBeginInfo, vk::SubpassContents::eInline);
-//        // Rendering tonemapper
-//        helloVk.drawPost(cmdBuff);
-//        // Rendering UI
-//        ImGui::RenderDrawDataVK(cmdBuff, ImGui::GetDrawData());
-//        cmdBuff.endRenderPass();
-//      }
-//
-//      // Submit for display
-//      cmdBuff.end();
-//      helloVk.submitFrame();
-//    }
-//    catch(const std::system_error& e)
-//    {
-//      if(e.code() == vk::Result::eErrorDeviceLost)
-//      {
-//#if _WIN32
-//        MessageBoxA(nullptr, e.what(), "Fatal Error", MB_ICONERROR | MB_OK | MB_DEFBUTTON1);
-//#endif
-//      }
-//      std::cout << e.what() << std::endl;
-//      return e.code().value();
-//    }
-//  }
 
   // Cleanup
   helloVk.getDevice().waitIdle();

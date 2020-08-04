@@ -54,7 +54,7 @@ public:
              const vk::PhysicalDevice& physicalDevice,
              uint32_t                  queueFamily) override;
   void createDescriptorSetLayout();
-  void loadModel(const std::string& filename, nvmath::mat4f transform = nvmath::mat4f(1));
+
   void updateDescriptorSet();
   void createUniformBuffer();
   void createSceneDescriptionBuffer();
@@ -63,7 +63,6 @@ public:
   void updateUniformBuffer();
   void onResize(int /*w*/, int /*h*/) override;
   void destroyResources();
-  void rasterize(const vk::CommandBuffer& cmdBuff);
 
 
   // The OBJ model
@@ -121,22 +120,17 @@ public:
   {
     float r, g, b, a;
   };
-  int WIDTH = 1280;
-  int HEIGHT = 720;
+  const int WIDTH = 1280;
+  const int HEIGHT = 720;
 
 
 
 
   VkShaderModule   computeShaderModule;
-
-  /*
-    The mandelbrot set will be rendered to this buffer.
-    The memory that backs the buffer is bufferMemory. 
-    */
   VkBuffer       buffer;
   VkDeviceMemory bufferMemory;
 
-  uint32_t bufferSize;  // size of `buffer` in bytes.
+  uint32_t m_bufferSize;  // size of `buffer` in bytes.
 
 public:
 
@@ -144,7 +138,7 @@ public:
   {
     void* mappedMemory = NULL;
     // Map the buffer memory, so that we can read from it on the CPU.
-    vkMapMemory(m_device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
+    NVVK_CHECK(vkMapMemory(m_device, bufferMemory, 0, m_bufferSize, 0, &mappedMemory));
     Pixel* pmappedMemory = (Pixel*)mappedMemory;
 
     // Get the color data from the buffer, and cast it to bytes.
@@ -157,6 +151,7 @@ public:
       image.push_back((unsigned char)(255.0f * (pmappedMemory[i].g)));
       image.push_back((unsigned char)(255.0f * (pmappedMemory[i].b)));
       image.push_back((unsigned char)(255.0f * (pmappedMemory[i].a)));
+
     }
     // Done reading, so unmap.
     vkUnmapMemory(m_device, bufferMemory);
@@ -197,7 +192,7 @@ public:
 
     VkBufferCreateInfo bufferCreateInfo = {};
     bufferCreateInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size               = bufferSize;  // buffer size in bytes.
+    bufferCreateInfo.size               = m_bufferSize;  // buffer size in bytes.
     bufferCreateInfo.usage =
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage buffer.
     bufferCreateInfo.sharingMode =
@@ -324,7 +319,7 @@ public:
     VkDescriptorBufferInfo descriptorBufferInfo = {};
     descriptorBufferInfo.buffer                 = buffer;
     descriptorBufferInfo.offset                 = 0;
-    descriptorBufferInfo.range                  = bufferSize;
+    descriptorBufferInfo.range                  = m_bufferSize;
 
     VkWriteDescriptorSet writeDescriptorSet = {};
     writeDescriptorSet.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

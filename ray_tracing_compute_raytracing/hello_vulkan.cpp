@@ -43,6 +43,19 @@
 #include "nvvk/commands_vk.hpp"
 #include "nvvk/renderpasses_vk.hpp"
 
+#define EMBED_SHADERS
+
+namespace {
+#ifdef EMBED_SHADERS
+//cat vert_shader.vert.spv | xxd -i > vert_shader.vert.array
+uint8_t s_computeShader[] = {
+
+#include "shaders/shader.comp.array"
+};
+#else
+uint8_t s_vertexShader[] = {0};
+#endif
+}
 
 // Holding the camera matrices
 struct CameraMatrices
@@ -66,6 +79,8 @@ void HelloVulkan::setup(const vk::Instance&       instance,
   AppBase::setup(instance, device, physicalDevice, queueFamily);
   m_alloc.init(device, physicalDevice);
   m_debug.setup(m_device);
+
+  m_bufferSize = WIDTH * HEIGHT * 4 * 4;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -141,7 +156,7 @@ void HelloVulkan::updateDescriptorSet()
   std::vector<vk::WriteDescriptorSet> writes;
 
   //compute shader
-  vk::DescriptorBufferInfo dbiComShdr = {buffer, 0, bufferSize};
+  vk::DescriptorBufferInfo dbiComShdr = {buffer, 0, m_bufferSize};
   writes.emplace_back(m_descSetLayoutBind.makeWrite(m_descSet, 0, &dbiComShdr));
   // Camera matrices and scene description
   vk::DescriptorBufferInfo dbiUnif{m_cameraMat.buffer, 0, VK_WHOLE_SIZE};
@@ -208,11 +223,15 @@ void HelloVulkan::createComputePipeline()
   auto                     code  = nvh::loadFile("shaders/shader.comp.spv", true, paths);
   std::vector<char>        v;
   std::copy(code.begin(), code.end(), std::back_inserter(v));
-
+#ifdef EMBED_SHADERS
   VkShaderModuleCreateInfo createInfo = {};
   createInfo.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize                 = sizeof(s_computeShader);
+  createInfo.pCode                    = reinterpret_cast<const uint32_t*>(s_computeShader);
+#else
   createInfo.pCode                    = reinterpret_cast<const uint32_t*>(v.data());
   createInfo.codeSize                 = v.size();
+#endif
 
   NVVK_CHECK(vkCreateShaderModule(m_device, &createInfo, NULL, &computeShaderModule));
 
@@ -252,59 +271,6 @@ void HelloVulkan::createComputePipeline()
   m_graphicsPipeline = pipeline;
   m_pipelineLayout   = pipelineLayout;
   m_descSetLayout    = descriptorSetLayout;
-}
-//--------------------------------------------------------------------------------------------------
-// Loading the OBJ file and setting up all buffers
-//
-void HelloVulkan::loadModel(const std::string& filename, nvmath::mat4f transform)
-{
-  using vkBU = vk::BufferUsageFlagBits;
-
-  ObjLoader loader;
-  loader.loadModel(filename);
-
-  // Converting from Srgb to linear
-  for(auto& m : loader.m_materials)
-  {
-    m.ambient  = nvmath::pow(m.ambient, 2.2f);
-    m.diffuse  = nvmath::pow(m.diffuse, 2.2f);
-    m.specular = nvmath::pow(m.specular, 2.2f);
-  }
-
-  ObjInstance instance;
-  instance.objIndex    = static_cast<uint32_t>(m_objModel.size());
-  instance.transform   = transform;
-  instance.transformIT = nvmath::transpose(nvmath::invert(transform));
-  instance.txtOffset   = static_cast<uint32_t>(m_textures.size());
-
-  ObjModel model;
-  model.nbIndices  = static_cast<uint32_t>(loader.m_indices.size());
-  model.nbVertices = static_cast<uint32_t>(loader.m_vertices.size());
-
-  // Create the buffers on Device and copy vertices, indices and materials
-  nvvk::CommandPool cmdBufGet(m_device, m_graphicsQueueIndex);
-  vk::CommandBuffer cmdBuf = cmdBufGet.createCommandBuffer();
-  model.vertexBuffer =
-      m_alloc.createBuffer(cmdBuf, loader.m_vertices,
-                           vkBU::eVertexBuffer | vkBU::eStorageBuffer | vkBU::eShaderDeviceAddress);
-  model.indexBuffer =
-      m_alloc.createBuffer(cmdBuf, loader.m_indices,
-                           vkBU::eIndexBuffer | vkBU::eStorageBuffer | vkBU::eShaderDeviceAddress);
-  model.matColorBuffer = m_alloc.createBuffer(cmdBuf, loader.m_materials, vkBU::eStorageBuffer);
-  model.matIndexBuffer = m_alloc.createBuffer(cmdBuf, loader.m_matIndx, vkBU::eStorageBuffer);
-  // Creates all textures found
-  createTextureImages(cmdBuf, loader.m_textures);
-  cmdBufGet.submitAndWait(cmdBuf);
-  m_alloc.finalizeAndReleaseStaging();
-
-  std::string objNb = std::to_string(instance.objIndex);
-  m_debug.setObjectName(model.vertexBuffer.buffer, (std::string("vertex_" + objNb).c_str()));
-  m_debug.setObjectName(model.indexBuffer.buffer, (std::string("index_" + objNb).c_str()));
-  m_debug.setObjectName(model.matColorBuffer.buffer, (std::string("mat_" + objNb).c_str()));
-  m_debug.setObjectName(model.matIndexBuffer.buffer, (std::string("matIdx_" + objNb).c_str()));
-
-  m_objModel.emplace_back(model);
-  m_objInstance.emplace_back(instance);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -437,38 +403,6 @@ void HelloVulkan::destroyResources()
 
 }
 
-//--------------------------------------------------------------------------------------------------
-// Drawing the scene in raster mode
-//
-void HelloVulkan::rasterize(const vk::CommandBuffer& cmdBuf)
-{
-  using vkPBP = vk::PipelineBindPoint;
-  using vkSS  = vk::ShaderStageFlagBits;
-  vk::DeviceSize offset{0};
-
-  m_debug.beginLabel(cmdBuf, "Rasterize");
-
-  // Dynamic Viewport
-  cmdBuf.setViewport(0, {vk::Viewport(0, 0, (float)m_size.width, (float)m_size.height, 0, 1)});
-  cmdBuf.setScissor(0, {{{0, 0}, {m_size.width, m_size.height}}});
-
-  // Drawing all triangles
-  cmdBuf.bindPipeline(vkPBP::eGraphics, m_graphicsPipeline);
-  cmdBuf.bindDescriptorSets(vkPBP::eGraphics, m_pipelineLayout, 0, {m_descSet}, {});
-  for(int i = 0; i < m_objInstance.size(); ++i)
-  {
-    auto& inst                = m_objInstance[i];
-    auto& model               = m_objModel[inst.objIndex];
-    m_pushConstant.instanceId = i;  // Telling which instance is drawn
-    cmdBuf.pushConstants<ObjPushConstant>(m_pipelineLayout, vkSS::eVertex | vkSS::eFragment, 0,
-                                          m_pushConstant);
-
-    cmdBuf.bindVertexBuffers(0, {model.vertexBuffer.buffer}, {offset});
-    cmdBuf.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-    cmdBuf.drawIndexed(model.nbIndices, 1, 0, 0, 0);
-  }
-  m_debug.endLabel(cmdBuf);
-}
 
 //--------------------------------------------------------------------------------------------------
 // Handling resize of the window
